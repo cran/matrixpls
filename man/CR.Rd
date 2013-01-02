@@ -28,8 +28,9 @@
 }
 \seealso{
   Other post-estimation functions: \code{\link{AVE}},
-  \code{\link{effects.matrixpls}}, \code{\link{GoF}},
-  \code{\link{loadings.matrixpls}}, \code{\link{R2}},
+  \code{\link{GoF}}, \code{\link{R2}},
+  \code{\link{effects.matrixpls}},
+  \code{\link{loadings.matrixpls}},
   \code{\link{residuals.matrixpls}}
 }
 

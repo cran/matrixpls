@@ -26,7 +26,7 @@
 \details{
   \code{params.regression} estimates the statistical model
   described by \code{model} with the following steps. If
-  \code{model} is not in the antive format, it is converted
+  \code{model} is not in the native format, it is converted
   to the native format containing matrices \code{inner},
   \code{reflective}, and \code{formative}. The weights
   \code{W} and the data covariance matrix \code{S} are used
@@ -48,7 +48,7 @@
   standard way of estimation in the PLS literature.
 }
 \seealso{
-  Other parameter estimators:
+  Other parameter estimators: \code{\link{params.plsc}},
   \code{\link{params.plsregression}}
 }
 
