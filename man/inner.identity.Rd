@@ -23,7 +23,7 @@
 \details{
   This scheme is not commonly discussed in the current PLS
   literature, but it is a special case that is analyzed in
-  the early PLS literature and currently implmented in at
+  the early PLS literature and currently implemented in at
   least the WarpPLS software. In the identity scheme
   identity matrix is used as the inner weight matrix
   \code{E}.
@@ -44,8 +44,8 @@
   North-Holland.
 }
 \seealso{
-  Other inner estimators: \code{\link{inner.centroid}},
-  \code{\link{inner.factor}}, \code{\link{inner.GSCA}},
+  Other inner estimators: \code{\link{inner.GSCA}},
+  \code{\link{inner.centroid}}, \code{\link{inner.factor}},
   \code{\link{inner.path}}
 }
 

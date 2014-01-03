@@ -4,7 +4,7 @@
 \usage{
   matrixpls(S, model, W.mod = NULL,
     parameterEstimator = params.regression, ...,
-    validateInput = TRUE)
+    outerEstimators = NULL, validateInput = TRUE)
 }
 \arguments{
   \item{S}{Covariance matrix of the data.}
@@ -30,6 +30,16 @@
 
   \item{...}{All other arguments are passed through to
   \code{matrixpls.weights}.}
+
+  \item{outerEstimators}{A function or a list of functions
+  used for outer estimation. If the value of this parameter
+  is a function, the same function is applied to all
+  composites. If the value of the parameter is a list, the
+  composite \code{n} is estimated with the estimator in the
+  \code{n}th position in the list. If this argument is
+  \code{NULL} the starting weights specified in
+  \code{W.mod} will be returned. The default is
+  \code{\link{outer.modeA}} (PLS Mode A estimation).}
 
   \item{validateInput}{A boolean indicating whether the
   validity of the parameter values should be tested.}

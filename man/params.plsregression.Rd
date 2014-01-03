@@ -48,7 +48,7 @@
   18. Retrieved from http://www.jstatsoft.org/v18/i02/paper
 }
 \seealso{
-  Other parameter estimators:
+  Other parameter estimators: \code{\link{params.plsc}},
   \code{\link{params.regression}}
 }
 

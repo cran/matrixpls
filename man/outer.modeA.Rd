@@ -25,7 +25,8 @@
   correlation matrix between the indicators and composites.
 }
 \seealso{
-  Other outer estimators: \code{\link{outer.fixedWeights}},
-  \code{\link{outer.GSCA}}, \code{\link{outer.modeB}}
+  Other outer estimators: \code{\link{outer.GSCA}},
+  \code{\link{outer.fixedWeights}},
+  \code{\link{outer.modeB}}
 }
 

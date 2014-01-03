@@ -35,8 +35,8 @@
   Physica-Verlag.
 }
 \seealso{
-  Other inner estimators: \code{\link{inner.centroid}},
-  \code{\link{inner.GSCA}}, \code{\link{inner.identity}},
-  \code{\link{inner.path}}
+  Other inner estimators: \code{\link{inner.GSCA}},
+  \code{\link{inner.centroid}},
+  \code{\link{inner.identity}}, \code{\link{inner.path}}
 }
 

@@ -2,67 +2,58 @@
 \alias{matrixpls.plspm}
 \title{A plspm compatibility wrapper for matrixpls}
 \usage{
-  matrixpls.plspm(Data, inner_matrix, outer_list,
-    modes = NULL, scheme = "centroid", scaled = TRUE,
-    tol = 1e-05, iter = 100, boot.val = FALSE, br = NULL,
-    plsr = FALSE, dataset = TRUE)
+  matrixpls.plspm(Data, path_matrix, blocks, modes = NULL,
+    scheme = "centroid", scaled = TRUE, tol = 1e-06,
+    maxiter = 100, boot.val = FALSE, br = NULL,
+    dataset = TRUE)
 }
 \arguments{
-  \item{Data}{A numeric matrix or data frame containing the
-  manifest variables.}
+  \item{Data}{matrix or data frame containing the manifest
+  variables.}
 
-  \item{inner_matrix}{A square (lower triangular) boolean
+  \item{path_matrix}{A square (lower triangular) boolean
   matrix representing the inner model (i.e. the path
-  relationships betwenn latent variables).}
+  relationships between latent variables).}
 
-  \item{outer_list}{List of vectors with column indices
-  from \code{x} indicating the sets of manifest variables
-  asociated to the latent variables (i.e. which manifest
-  variables correspond to the latent variables). Length of
-  \code{outer_list} must be equal to the number of rows of
-  \code{inner_matrix}.}
+  \item{blocks}{list of vectors with column indices or
+  column names from \code{Data} indicating the sets of
+  manifest variables forming each block (i.e. which
+  manifest variables correspond to each block).}
 
-  \item{modes}{A character vector indicating the type of
-  measurement for each latent variable. \code{"A"} for
-  reflective measurement or \code{"B"} for formative
-  measurement (\code{NULL} by default). The length of
-  \code{modes} must be equal to the length of
-  \code{outer_list}).}
+  \item{modes}{character vector indicating the type of
+  measurement for each block. Possible values are:
+  \code{"A", "B", "newA", "PLScore", "PLScow"}. The length
+  of \code{modes} must be equal to the length of
+  \code{blocks}.}
 
-  \item{scheme}{A string of characters indicating the type
-  of inner weighting scheme. Possible values are
-  \code{"centroid"}, \code{"factor"}, or \code{"path"}.}
+  \item{scheme}{string indicating the type of inner
+  weighting scheme. Possible values are \code{"centroid"},
+  \code{"factorial"}, or \code{"path"}.}
 
-  \item{scaled}{A logical value indicating whether scaling
-  data is performed When (\code{TRUE} data is scaled to
-  standardized values (mean=0 and variance=1) The variance
-  is calculated dividing by \code{N} instead of
-  \code{N-1}).}
+  \item{scaled}{whether manifest variables should be
+  standardized. Only used when \code{scaling = NULL}. When
+  (\code{TRUE}, data is scaled to standardized values
+  (mean=0 and variance=1). The variance is calculated
+  dividing by \code{N} instead of \code{N-1}).}
 
-  \item{tol}{Decimal value indicating the tolerance
-  criterion for the iterations (\code{tol=0.00001}). Can be
-  specified between 0 and 0.001.}
+  \item{tol}{decimal value indicating the tolerance
+  criterion for the iterations (\code{tol=0.000001}). Can
+  be specified between 0 and 0.001.}
 
-  \item{iter}{An integer indicating the maximum number of
-  iterations (\code{iter=100} by default). The minimum
-  value of \code{iter} is 100.}
+  \item{maxiter}{integer indicating the maximum number of
+  iterations (\code{maxiter=100} by default). The minimum
+  value of \code{maxiter} is 100.}
 
-  \item{boot.val}{A logical value indicating whether
-  bootstrap validation is performed (\code{FALSE} by
-  default).}
+  \item{boot.val}{whether bootstrap validation should be
+  performed. (\code{FALSE} by default).}
 
-  \item{br}{An integer indicating the number bootstrap
-  resamples. Used only when \code{boot.val=TRUE}. When
-  \code{boot.val=TRUE}, the default number of re-samples is
-  100, but it can be specified in a range from 100 to
-  1000.}
+  \item{br}{number bootstrap resamples. Used only when
+  \code{boot.val=TRUE}. When \code{boot.val=TRUE}, the
+  default number of re-samples is 100, but it can be
+  specified in a range from 100 to 1000.}
 
-  \item{plsr}{A logical value indicating whether pls
-  regression is applied to calculate path coefficients
-  (\code{FALSE} by default).}
-
-  \item{dataset}{A logical value indicating whether the
-  data matrix should be retrieved (\code{TRUE} by
+  \item{dataset}{whether the data matrix used in the
+  computations should be retrieved (\code{TRUE} by
   default).}
 }
 \value{
@@ -85,10 +76,10 @@
   this \code{matrixpls.plspm} is substantially less
   efficient than the \code{\link{matrixpls}} function.
 
-  The argument \code{inner_matrix} is a matrix of zeros and
+  The argument \code{path_matrix} is a matrix of zeros and
   ones that indicates the structural relationships between
   composites. This must be a lower triangular matrix.
-  \code{inner_matrix} will contain a 1 when column \code{j}
+  \code{path_matrix} will contain a 1 when column \code{j}
   affects row \code{i}, 0 otherwise. \cr
 }
 \examples{
@@ -119,17 +110,18 @@ plspm.res <- plspm(satisfaction, sat_inner, sat_outer, sat_mod,
 matrixpls.res <- matrixpls.plspm(satisfaction, sat_inner, sat_outer, sat_mod,
                                  scaled=FALSE, boot.val=FALSE)
 
+# If RUnit is installed check that the results are identical
+
+if(is.element("RUnit", installed.packages()[,1])){
+  library(RUnit)
+  checkEquals(plspm.res, matrixpls.res, tol = 0.001)
+}
+
 # print the resuls
 
 summary(plspm.res)
 summary(matrixpls.res)
 
-# If RUnit is installed check that the results are identical
-
-if(is.element("RUnit", installed.packages()[,1])){
-	library(RUnit)
-	checkEquals(plspm.res, matrixpls.res, tol = 0.001)
-}
 }
 \references{
   Sanchez, G. (2013). \emph{PLS Path Modeling with R.}
