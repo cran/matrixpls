@@ -4,9 +4,9 @@
 \usage{
   matrixpls.weights(S, inner.mod, W.mod,
     outerEstimators = outer.modeA,
-    innerEstimator = inner.path,
-    convCheck = function(W, W_new) {
-        max(abs(W_new - W)) }, tol = 1e-05, iter = 100,
+    innerEstimator = inner.path, ...,
+    convCheck = function(W, W_old) {
+        max(abs(W_old - W)) }, tol = 1e-05, iter = 100,
     validateInput = TRUE)
 }
 \arguments{
@@ -54,6 +54,9 @@
 
   \item{validateInput}{A boolean indicating whether the
   validity of the parameter values should be tested.}
+
+  \item{...}{All other arguments are passed through to
+  \code{outerEstimators} and \code{innerEstimator}.}
 }
 \value{
   An object of class \code{"matrixplsweights"}, which is a

@@ -2,7 +2,7 @@
 \alias{inner.path}
 \title{PLS inner estimation with the path scheme}
 \usage{
-  inner.path(S, W, inner.mod)
+  inner.path(S, W, inner.mod, ...)
 }
 \arguments{
   \item{S}{Covariance matrix of the data.}
@@ -12,10 +12,8 @@
 
   \item{inner.mod}{A square matrix specifying the
   relationships of the composites in the model.}
-}
-\value{
-  A matrix of unscaled inner weights \code{E} with the same
-  dimesions as \code{inner.mod}.
+
+  \item{...}{Other parameters are ignored}
 }
 \description{
   Calculates a set of inner weights based on the path

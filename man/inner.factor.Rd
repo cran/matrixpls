@@ -2,7 +2,7 @@
 \alias{inner.factor}
 \title{PLS inner estimation with the factor scheme}
 \usage{
-  inner.factor(S, W, inner.mod)
+  inner.factor(S, W, inner.mod, ...)
 }
 \arguments{
   \item{S}{Covariance matrix of the data.}
@@ -12,6 +12,8 @@
 
   \item{inner.mod}{A square matrix specifying the
   relationships of the composites in the model.}
+
+  \item{...}{Other parameters are ignored}
 }
 \value{
   A matrix of unscaled inner weights \code{E} with the same

@@ -2,7 +2,7 @@
 \alias{params.regression}
 \title{Parameter estimation with separate regression analyses}
 \usage{
-  params.regression(S, W, model)
+  params.regression(S, W, model, ...)
 }
 \arguments{
   \item{S}{Covariance matrix of the data.}
@@ -15,6 +15,9 @@
   containing three matrices \code{inner},
   \code{reflective}, and \code{formative} defining the free
   regression paths in the model.}
+
+  \item{...}{All other arguments are passed through to
+  \code{matrixpls.weights} and \code{parameterEstimator}.}
 }
 \value{
   A named vector of parameter estimates.

@@ -3,8 +3,8 @@
 \title{Partial Least Squares estimation}
 \usage{
   matrixpls(S, model, W.mod = NULL,
-    parameterEstimator = params.regression, ...,
-    outerEstimators = NULL, validateInput = TRUE)
+    parameterEstimator = params.regression,
+    outerEstimators = NULL, validateInput = TRUE, ...)
 }
 \arguments{
   \item{S}{Covariance matrix of the data.}
@@ -29,7 +29,7 @@
   returns a named vector of parameter estimates.}
 
   \item{...}{All other arguments are passed through to
-  \code{matrixpls.weights}.}
+  \code{matrixpls.weights} and \code{parameterEstimator}.}
 
   \item{outerEstimators}{A function or a list of functions
   used for outer estimation. If the value of this parameter

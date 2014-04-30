@@ -2,7 +2,7 @@
 \alias{outer.fixedWeights}
 \title{PLS outer estimation with fixed weights}
 \usage{
-  outer.fixedWeights(S, W, E, W.mod)
+  outer.fixedWeights(S, W, E, W.mod, ...)
 }
 \arguments{
   \item{S}{Covariance matrix of the data.}
@@ -15,6 +15,8 @@
 
   \item{W.mod}{A matrix specifying the weight relationships
   and their starting values.}
+
+  \item{...}{Other parameters are ignored}
 }
 \value{
   A matrix of unscaled outer weights \code{W} with the same
@@ -25,6 +27,7 @@
 }
 \seealso{
   Other outer estimators: \code{\link{outer.GSCA}},
-  \code{\link{outer.modeA}}, \code{\link{outer.modeB}}
+  \code{\link{outer.factor}}, \code{\link{outer.modeA}},
+  \code{\link{outer.modeB}}
 }
 

@@ -22,12 +22,18 @@
   The \code{matrixpls} method for generic function
   \code{residuals} computes the residual covariance matrix
   and various fit indices presented by Lohmöller (1989, ch
-  2.4). '
+  2.4)
 }
 \references{
   Lohmöller J.-B. (1989) \emph{Latent variable path
   modeling with partial least squares.} Heidelberg:
   Physica-Verlag.
+
+  Henseler, J., Dijkstra, T. K., Sarstedt, M., Ringle, C.
+  M., Diamantopoulos, A., Straub, D. W., … Calantone, R. J.
+  (2014). Common Beliefs and Reality About PLS Comments on
+  Rönkkö and Evermann (2013). Organizational Research
+  Methods, 17(2), 182–209. doi:10.1177/1094428114526928
 }
 \seealso{
   Other post-estimation functions: \code{\link{AVE}},
