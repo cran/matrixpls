@@ -33,7 +33,8 @@
 #'with separate OLS regressions in the same way as in \code{\link{params.regression}}.
 #'This differs from Dijkstra's (2011) PLSc estimator that uses
 #'2SLS. The reason for not using 2SLS is that PLS is commonly used with models that
-#'do not contain variables that could be used as instruments in the 2SLS estimation.
+#'do not contain a sufficient number of exogenous variables that could be used 
+#'as instruments in the 2SLS estimation.
 #'
 #'The results from the disattenuation process are used as estimates of the \code{reflective}
 #'part of the model and the \code{formative} part of the model estimated with separate
@@ -56,8 +57,11 @@
 #'calculated by a simple formula that approximately minimizes squared residual covariances
 #'of the factor model. \code{minres}, \code{wls}, \code{gls}, \code{pa}, and \code{ml}
 #'will use a factor analysis and passing this parameter through to \code{\link[psych]{fa}}.
+#'\code{"cfa"} estimates a maximum likelihood confirmatory factor analysis with \code{\link[lavaan]{lavaan}}
 #'
 #'@inheritParams matrixpls 
+#'
+#'@param tsls Should estimation be done with two stage least squares instead of regression
 #'
 #'@return A named vector of parameter estimates.
 #'
@@ -75,10 +79,10 @@
 #'
 #'@export
 
-params.plsc <- function(S, W, model, fm = "dijkstra", ...){
+params.plsc <- function(S,  model, W, fm = "dijkstra", tsls = FALSE, ...){
   
   nativeModel <- parseModelToNativeFormat(model)
-  
+
   ab <- nrow(W) #number of blocks
   ai <- ncol(W) #total number of indicators
   p <- lapply(1:nrow(W),function(x){which(W[x,]!=0)}) # indicator indices
@@ -123,26 +127,81 @@ params.plsc <- function(S, W, model, fm = "dijkstra", ...){
     for (i in 1:ab) {
       idx <- p[[i]]
       Q[i] <- c2[i]*(t(W[i,idx])%*%W[i,idx])^2
+      # Debug inadmissible Qs
+      # if(abs(Q[i]) > 1) browser()
     }
   }
+  
   
   # Else use factor analysis
   
   else{
-    p_refl <- apply(nativeModel$reflective, 2, function(x){which(x!=0)}) # indicator indices based on the reflective model
+    
     L <- matrix(0,ai,ab)
     Q <- rep(1,ab)
-    for (i in 1:ab) {	
-      idx <- p_refl[,i]
-      L[idx,i] <- fa(S[idx,idx], fm = fm)$loadings
-      # Non-factor indicators are assumed to be perfectly reliable and not corrected
-      indicator_reliabilities <- L
-      indicator_reliabilities[indicator_reliabilities == 0] <- 1
-      Q[i] <- sum(indicator_reliabilities[idx,i] * W[i,idx])^2
+    
+    # Use confirmatory factor analysis
+    
+    if(fm == "cfa"){
+      
+      Lp <- nativeModel$reflective # Loading pattern
+      
+      # Loadings
+      parTable <- data.frame(lhs = colnames(Lp)[col(Lp)[Lp!=0]], op = "=~",  rhs = rownames(Lp)[row(Lp)[Lp!=0]], stringsAsFactors = F)
+      
+      # Errors
+      parTable <- rbind(parTable,data.frame(lhs = rownames(Lp)[row(Lp)[Lp!=0]], op = "~~",  rhs = rownames(Lp)[row(Lp)[Lp!=0]], stringsAsFactors = F))
+      
+      # Factor covariances
+      a <- matrix(0,ncol(Lp),ncol(Lp))
+      parTable <- rbind(parTable,data.frame(lhs = colnames(Lp)[col(a)[lower.tri(a)]], op = "~~",  rhs = colnames(Lp)[row(a)[lower.tri(a)]], stringsAsFactors = F))
+      
+      # Factor variances
+      parTable <- rbind(parTable,data.frame(lhs = colnames(Lp), op = "~~",  rhs = colnames(Lp), stringsAsFactors = F))
+      
+      parTable <- cbind(id = as.integer(1:nrow(parTable)), 
+                        parTable,
+                        user = as.integer(ifelse(1:nrow(parTable)<=sum(Lp!=0),1,0)),
+                        group = as.integer(1),
+                        free = as.integer(ifelse(1:nrow(parTable)<=(nrow(parTable)-ncol(Lp)),1:nrow(parTable),0)),
+                        ustart = as.integer(ifelse(1:nrow(parTable)<=(nrow(parTable)-ncol(Lp)),NA,1)),
+                        exo = as.integer(0),
+                        label = "",
+                        eq.id = as.integer(0),
+                        unco = as.integer(ifelse(1:nrow(parTable)<=(nrow(parTable)-ncol(Lp)),1:nrow(parTable),0)),
+                        stringsAsFactors = FALSE)
+      
+      
+      cfa.res <- lavaan::lavaan(parTable, sample.cov = S,
+                                sample.nobs = 100, # this does not matter, but is required by lavaan
+                                se="none",
+                                sample.cov.rescale = FALSE)
+      
+      L[Lp==1] <- coef(cfa.res)[1:sum(Lp!=0)]
+      Q <- rowSums(t(L)*W)^2
       
     }
+    
+    # Else loop over factors and use EFA
+    else{
+      
+      # indicator indices based on the reflective model. Coerced to list to avoid the problem that
+      # apply can return a list or a matrix depending on whether the number of indicators is equal
+      # between the LVs
+      
+      p_refl <- apply(nativeModel$reflective, 2, function(x){list(which(x!=0))})
+      
+      for (i in 1:ab) {
+        idx <- p_refl[[i]][[1]]
+        L[idx,i] <- fa(S[idx,idx], fm = fm)$loadings
+        # Non-factor indicators are assumed to be perfectly reliable and not corrected
+        indicator_reliabilities <- L
+        indicator_reliabilities[indicator_reliabilities == 0] <- 1
+        Q[i] <- sum(indicator_reliabilities[idx,i] * W[i,idx])^2
+        
+      }
+    }
   }
-  
   # Determination of consistent estimates for the correlation between the
   # latent variables, see (15) and (16) of Dijkstra, April 7, 2011.
   R <- C / sqrt(Q) %*% t(sqrt(Q))
@@ -153,7 +212,13 @@ params.plsc <- function(S, W, model, fm = "dijkstra", ...){
   
   innerRegressionIndices <- which(nativeModel$inner==1, useNames = FALSE)
   
-  inner <- regressionsWithCovarianceMatrixAndModelPattern(R,nativeModel$inner)
+  if(tsls){
+    inner <- TwoStageLeastSquaresWithCovarianceMatrixAndModelPattern(R,nativeModel$inner)
+  }
+  else{
+    inner <- regressionsWithCovarianceMatrixAndModelPattern(R,nativeModel$inner)
+  }
+  
   innerVect <- inner[innerRegressionIndices]
   names(innerVect) <- paste(rownames(inner)[row(inner)[innerRegressionIndices]],"~",
                             colnames(inner)[col(inner)[innerRegressionIndices]], sep="")		
@@ -171,14 +236,92 @@ params.plsc <- function(S, W, model, fm = "dijkstra", ...){
   
   # Store these in the result object
   attr(results,"C") <- R
-  IC[L!=0] <- L[L!=0]
+  
+  if(fm == "dijkstra"){
+    attr(results,"c") <- c
+  } 
+  
+  # Fix the IC matrix. Start by replacing correlations with the corrected loadings
+  tL <- t(L)
+  IC[tL!=0] <- tL[tL!=0]
+  
+  # Disattenuate the remaining correlations
+  IC[tL==0] <- (IC/sqrt(Q))[tL==0]
+  
   attr(results,"IC") <- IC
   attr(results,"beta") <- inner
+  
+  names(Q) <- rownames(inner)
+  attr(results,"Q") <- Q
   
   return(results)
   
 }
 
+
+#
+# Runs 2SLS defined by model
+# using covariance matrix S and places the results in model
+#
+
+TwoStageLeastSquaresWithCovarianceMatrixAndModelPattern <- function(S,model){
+
+  # Ensure that S and model have right order
+  S <- S[rownames(model),colnames(model)]
+  
+  exog <- apply(model == 0, 1, all)
+  endog <- ! exog
+  
+  # Use all exogenous variables as instruments
+  
+  instruments <- which(exog) 
+  for(row in 1:nrow(model)){
+    
+    independents <- which(model[row,]!=0, useNames = FALSE)
+    
+    
+    # Check if this variable is endogenous
+          
+    if(length(independents) > 0 ){
+      
+      # Stage 1
+      
+      needInstruments <- which(model[row,]!=0 & endog, useNames = FALSE)
+      
+      # This is a matrix that will transform the instruments into independent
+      # variables. By default, all variables are instrumented by themselves
+      
+      stage1Model <- diag(nrow(model))
+        
+      for(toBeInstrumented in needInstruments){
+        # Regress the variable requiring instruments on its predictors excluding the current DV
+        
+        coefs1 <- solve(S[instruments, instruments],S[toBeInstrumented, instruments])
+        
+        stage1Model[toBeInstrumented, toBeInstrumented] <- 0
+        stage1Model[toBeInstrumented, instruments] <- coefs1
+      }
+      
+      
+      # Stage 2
+      
+      S2 <- stage1Model %*% S %*% t(stage1Model)
+        
+      if(length(independents)==1){
+        # Simple regresion is the covariance divided by the variance of the predictor
+        model[row,independents] <- S2[row,independents]/S2[independents,independents]
+      }
+      if(length(independents)>1){
+        coefs2 <- solve(S2[independents,independents],S2[row,independents])
+        model[row,independents] <- coefs2
+      }
+      
+    }
+    # Continue to the next equation
+  }
+  
+  return(model)
+}
 
 
 

@@ -18,7 +18,8 @@
 #'
 #'@inheritParams matrixpls
 #'
-#'@param ... All other arguments are forwared through to \code{\link[simsem]{sim}} or \code{\link{matrixpls.boot}}.
+#'@param ... All other arguments are passed through to \code{\link[simsem]{sim}},
+#' \code{\link{matrixpls.boot}}, or \code{\link{matrixpls}}.
 #'
 #'@param cilevel Confidence level. This argument will be forwarded to the \code{\link[boot]{boot.ci}} when calculating the confidence intervals.
 #'
@@ -32,20 +33,22 @@
 #'
 #'@inheritParams simsem::sim
 #'
-#'@example example/matrixpls.sim-example.R
+# @example example/matrixpls.sim-example.R
 #'@example example/matrixpls.sim-example2.R
-#'@example example/matrixpls.plsc-example2.R
+# @example example/matrixpls.plsc-example2.R
 #'
 #'@seealso
 #'
-#'\code{\link[simsem]{sim}}, \code{\link[simsem]{SimResult-class}}, \code{\link{matrixpls.boot}}, \code{\link[boot]{boot}}, \code{\link[boot]{boot.ci}}
+#'\code{\link{matrixpls}}, \code{\link{matrixpls.boot}}, \code{\link[simsem]{sim}}, \code{\link[simsem]{SimResult-class}}
 #'
 #'@include matrixpls.R
 #'
 #'@export
 
 
-matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.95, citype=c("norm","basic", "stud", "perc", "bca"), boot.R = 500, fitIndices = fitSummary){
+matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.95,
+                          citype=c("norm","basic", "stud", "perc", "bca"), 
+                          boot.R = 500, fitIndices = fitSummary){
   
   if(! requireNamespace("simsem")) stop("matrixpls.sim requires the simsem package")
   
@@ -59,7 +62,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
   # Decide which arguments to route to simsem and which to matrispls.boot
   
   allArgs <- list(...)	
-  simsem.argNames <- names(formals(sim))
+  simsem.argNames <- names(formals(simsem::sim))
   
   whichArgsToSimsem <- names(allArgs) %in% simsem.argNames
   simsemArgs <- allArgs[whichArgsToSimsem]
@@ -76,14 +79,59 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     
     cvMat <- diag(nrow(nativeModel$reflective))
     colnames(cvMat) <- rownames(cvMat) <- rownames(nativeModel$reflective)
-    fit <- lavaan(model, sample.cov = cvMat, sample.nobs = 100)
-    simsemArgs$generate <- model.lavaan(fit)
+    fit <- lavaan::lavaan(model, sample.cov = cvMat, sample.nobs = 100)
+    simsemArgs$generate <- simsem::model.lavaan(fit)
     
   }
   
   if(!"W.mod" %in% names(matrixplsArgs)) matrixplsArgs$W.mod<- defaultWeightModelWithModel(model)
   
   matrixplsArgs <- c(list(R= boot.R, model = nativeModel),matrixplsArgs)
+  
+  #
+  # The LV scores returned by SimSem for endogenous LVs are not the LVs, but their error terms.
+  # To get scores for the endogenous LVs, we need to calculate these based on the other LVs. To
+  # so this, the population model needs to be parsed.
+  #
+  
+  partable <- NULL
+  
+  if(is.character(model)) {
+    # Remove all multigroup specifications because we do not support multigroup analyses
+    model <- gsub("c\\(.+?\\)","NA",model)
+    partable <- lavaanify(model)
+  } else if (is.partable(model)) {
+    partable <- model
+  } else if (is(model, "lavaan")) {
+    partable <- model@ParTable
+  }
+  
+  if(!is.null(partable)){
+    
+    factorLoadings <- partable[partable$op == "=~",]
+    regressions <- partable[partable$op == "~",]
+    formativeLoadings <- partable[partable$op == "<~",]
+    
+    # Parse the variables
+    latentVariableNames <- unique(c(factorLoadings$lhs, formativeLoadings$lhs))
+    
+    # Set up empty model tables
+    
+    inner <- matrix(0,length(latentVariableNames),length(latentVariableNames))
+    colnames(inner)<-rownames(inner)<-latentVariableNames
+    
+    # Set the relationships in the tables
+    
+    latentRegressions <- regressions[regressions$rhs %in% latentVariableNames & 
+                                       regressions$lhs %in% latentVariableNames,]
+    
+    rows <- match(regressions$lhs, latentVariableNames)
+    cols <- match(regressions$rhs, latentVariableNames)
+    indices <- rows + (cols-1)*nrow(inner) 
+    
+    inner[indices] <- regressions$ustart
+    
+  }
   
   # A function that takes a data set and returns a list. The list must
   # contain at least three objects: a vector of parameter estimates (coef),
@@ -96,7 +144,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
   # objects must be the same.
   
   
-  model  <- function(data){
+  modelFun  <- function(data){
     
     # Indices for parameters excluding weights
     
@@ -109,32 +157,60 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
       matrixpls.res <- do.call(matrixpls, c(list(S), matrixplsArgs))
     }
     else{
-      
       boot.out <- do.call(matrixpls.boot, c(list(as.matrix(data)), matrixplsArgs))
       matrixpls.res  <- boot.out$t0
-      
     }
     
-    # Check for inadmissible solutions. The non-boolean values of "converged" are undocumented,
-    # but can be found in the SimSem source code, where the following code is
-    # adapted from. (sim.R: lines 881-897)
+    # Check for inadmissible solutions. 
     #
+    # 0: Converged normally 
     # 1: Non-convergent result
     # 2: Non-converged imputation (not used)
     # 3: At least one SE is negative or NA (not used)
-    # 4: At least one variance estimate is negative (not used)
+    # 4: At least one variance estimate is negative
     # 5: At least one correlation estimate is greater than 1 or less than -1
     
-    
     if(attr(matrixpls.res,"converged")){
+      
       converged <- 0
+      
       C <- attr(matrixpls.res,"C")
-      if(max(abs(C[lower.tri(C)]))>1) converged <- 5 
+      
+      if(max(abs(C[lower.tri(C)]))>1){
+        converged <- 5 
+      }
+      # If the model is estimated with 2SLS, then checking C is not enough to check for admissible
+      # solution. We need to calculate the explained variances of the endogenous composites
+      
+      else{
+        beta <- attr(matrixpls.res,"beta")
+        if(any(diag(beta%*%C%*%t(beta)) > 1)){
+          converged <- 4
+        }
+      }
     }
     else converged <- 1
     
     ret <- list(coef = matrixpls.res[parameterIndices],
                 converged = converged)
+    
+    # If the data were generated sequentially using LV scores, calculate the true reliabilities
+    
+    latentVar <- attr(data,"latentVar")
+    
+    if(! is.null(latentVar)){
+      lvScores <-  as.matrix(data) %*% t(attr(matrixpls.res, "W"))
+      
+      # The latent vars and composites should be in the same order. 
+      trueScores <- as.matrix(latentVar[,1:ncol(lvScores)])
+      
+      r <- diag(cor(lvScores,trueScores))
+      
+      # Keep the sign of the correlation when calculating reliabilities
+      R <- sign(r) * r^2
+      names(R) <- colnames(lvScores)
+      attr(matrixpls.res, "R") <- R
+    }
     
     # Store CIs and SEs if bootstrapping was done
     
@@ -177,14 +253,8 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     return(ret)
   }
   
-  simsemArgs <- c(list(nRep = nRep, model = model, n = n, saveLatentVar = TRUE, 
-                       
-                       # Outfun is neeeded to get the matrixpls objects into the simsem results.
-                       # The function is actually never called, but simsem checks that it is not
-                       # null before returing extra output.
-                       # see https://github.com/simsem/simsem/issues/12
-                       
-                       outfun = identity),
+  simsemArgs <- c(list(nRep = nRep, model = modelFun, n = n, saveLatentVar = TRUE, 
+                       outfun = function(x){x$extra}),
                   simsemArgs)
   
   ret <- do.call(simsem::sim, simsemArgs)

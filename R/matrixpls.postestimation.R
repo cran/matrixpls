@@ -2,16 +2,16 @@
 # Various post-estimation functions
 #
 
-#'@title 	Total, Direct, and Indirect Effects for PLS model
+#'@title 	Total, Direct, and Indirect Effects for matrixpls results
 #'
 #'@description
 #'
 #'The \code{matrixpls} method for the standard generic function \code{effects} computes total, direct, 
-#'and indirect effects for a PLS model according to the method described in Fox (1980).
+#'and indirect effects for a matrixpls results according to the method described in Fox (1980).
 #'
 #'Adapted from the \code{\link[sem]{effects}} function of the \code{sem} package
 #'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
 #'
 #'@param ... All other arguments are ignored.
 #'
@@ -30,7 +30,7 @@
 #'
 #'@S3method effects matrixpls
 
-effects.matrixpls <- function(object = NULL,  ...) {
+effects.matrixpls <- function(object,  ...) {
   
   A <- attr(object,"beta")
   endog <- rowSums(attr(object,"model")$inner)!=0 
@@ -63,14 +63,14 @@ print.matrixplseffects <- function(x, ...){
   invisible(x)
 }
 
-#'@title Residual diagnostics for PLS model
+#'@title Residual diagnostics for matrixpls results
 #'
 #'@description
 #'
 #'The \code{matrixpls} method for generic function \code{residuals} computes the residual
 #'covariance matrix and various fit indices presented by Lohmöller (1989, ch 2.4)
 #'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
 #'
 #'@param ... All other arguments are ignored.
 #'
@@ -185,14 +185,14 @@ print.matrixplsresiduals <- function(x, ...){
   print(data.frame(Value = unlist(x$indices)), ...)
 }
 
-#'@title R2	for PLS model
+#'@title R2	for matrixpls results
 #'
 #'@description
 #'
 #'The \code{matrixpls} method for the generic function \code{R2} computes the squared multiple correlation (R2)
 #'for composites predicted by other composites in the model.
 #'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
 #'
 #'@param ... All other arguments are ignored.
 #'
@@ -224,13 +224,13 @@ print.matrixplsr2 <- function(x, ...){
   print.table(x, ...)
 }
 
-#'@title Goodness of Fit indices for PLS model
+#'@title Goodness of Fit indices for matrixpls results
 #'
 #'@description
 #'
-#'The \code{matrixpls} method for the generic function \code{GoF} computes the Goodness of Fit index for PLS model.
+#'The \code{matrixpls} method for the generic function \code{GoF} computes the Goodness of Fit index for matrixpls results.
 #'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
 #'
 #'@param ... All other arguments are ignored.
 #'
@@ -276,7 +276,7 @@ print.matrixplsgof <- function(x, digits=getOption("digits"), ...){
   cat("\n")
 }
 
-#'@title Factor loadings matrix from PLS model
+#'@title Factor loadings matrix from matrixpls results
 #'
 #'@description
 #'
@@ -310,14 +310,14 @@ loadings.matrixpls <- function(x, ...) {
   res
 }
 
-#'@title Composite Reliability indices for PLS model
+#'@title Composite Reliability indices for matrixpls results
 #'
 #'@description
 #'
 #'The \code{matrixpls} method for the generic function \code{CR} computes Composite Reliability 
 #'indices for the model using the formula presented by Fornell and Larcker (1981).
 #'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
 #'
 #'@param ... All other arguments are ignored.
 #'
@@ -363,20 +363,87 @@ print.matrixplscr <- function(x, ...){
   print.table(x, ...)
 }
 
+#'@title Predict method for matrixpls results
+#'
+#'@description
+#'
+#'The \code{matrixpls} method for the generic function \code{predict} predict.
+#'Predicts the reflective indicators of endogenous latent variables using
+#'estimated model and data for the indicators of exogenous latent variables
+#'
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
+#'
+#'@param newdata A data frame or a matrix containing data used for prediction.
+#'
+#'@param ... All other arguments are ignored.
+#'
+#'@return a matrix of predicted values for reflective indicators of endogenous latent variables.
+#'
+#'@references
+#'
+#'Wold, H. (1974). Causal flows with latent variables: Partings of the ways in the light of NIPALS modelling. \emph{European Economic Review}, 5(1), 67–86. doi:10.1016/0014-2921(74)90008-7
+#'
+#'
+#'@family post-estimation functions
+#'
+#'@export
+#'
+#'@method predict matrixpls
+#'
+#'@S3method predict matrixpls
 
-#'@title Average Variance Extracted indices for PLS model
+
+predict.matrixpls <- function(object, newdata, ...){
+      
+  nativeModel <- attr(object,"model")
+  exog <- rowSums(nativeModel$inner)==0
+  W <- attr(object,"W")
+  beta <- attr(object,"beta")
+  
+  reflective <- nativeModel$reflective
+  reflective[which(reflective==1)] <- object[grep("=~",names(object))]
+  
+  # Reorder the variables in newdata
+  data <- NULL
+  
+  for(name in colnames(W)){
+    if(! name %in% colnames(newdata)){
+      data <- cbind(data,NA)
+    }
+    else{
+      data <- cbind(data,newdata[,name])
+    }
+  }
+  
+  colnames(data) <- colnames(W)
+    
+  LVScores <- as.matrix(data) %*% t(W)
+    
+  # Predict endog LVs usign reduced from equations
+  Beta <- beta[! exog, ! exog]
+  Gamma <- beta[! exog, exog]
+  
+  LVScoresEndo <- (LVScores[,exog] %*% t(Gamma)) %*% solve(diag(nrow(Beta))- t(Beta))
+  
+  LVScores[,! exog] <- LVScoresEndo
+  
+  LVScores %*% t(reflective)
+}
+
+#'@title Average Variance Extracted indices for matrixpls results
 #'
 #'@description
 #'
 #'The \code{matrixpls} method for the generic function \code{AVE} computes Average Variance Extracted 
 #'indices for the model using the formula presented by Fornell and Larcker (1981).
 #'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
+#'@param object matrixpls estimation result object produced by the \code{\link{matrixpls}} function.
 #'
 #'@param ... All other arguments are ignored.
 #'
 #'@return A list containing the Average Variance Extracted indices in the first position and the differences
 #'between AVEs and largest squared correlations with other composites in the second position.
+#'
 #'
 #'@references
 #'
@@ -422,9 +489,6 @@ AVE.matrixpls <- function(object, ...) {
                 AVE_correlation = aves_correlation)
   
   class(result) <- "matrixplsave"
-  
-  
-  C <- attr(object,"C")
   result
 }
 
