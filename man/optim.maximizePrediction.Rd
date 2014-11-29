@@ -20,6 +20,8 @@ Calculates the predicted variances of reflective indicators. The
 prediction criterion is negative of the sum of predicted variances.
 }
 \seealso{
-Other Weight optimization criteria: \code{\link{optim.maximizeInnerR2}}
+Other Weight optimization criteria: \code{\link{optim.GCCA}};
+  \code{\link{optim.GSCA}};
+  \code{\link{optim.maximizeInnerR2}}
 }
 

@@ -204,7 +204,13 @@ print.matrixpls <- function(x, ...){
     cat("\n Standard errors based on",boot.out$R,"bootstrap replications\n")
   }
   
-  print(attr(x,"W"), ...)
+  W <- attr(x,"W")
+  
+  attr(W,"iterations") <- attr(x,"iterations")
+  attr(W,"converged") <- attr(x,"converged")
+    
+  class(W) <- "matrixplsweights"
+  print(W, ...)
   
 }
 
@@ -335,17 +341,17 @@ weight.pls <- function(S, model, W.mod,
   if(validateInput){
     
     # All parameters must have values
-    assert_all_are_not_na(formals())
+    assertive::assert_all_are_not_na(formals())
     
     # S must be symmetric and a valid covariance matrix
-    assert_is_matrix(S)
-    assert_is_symmetric_matrix(S)
-    assert_is_identical_to_true(is.positive.semi.definite(S))
+    assertive::assert_is_matrix(S)
+    assertive::assert_is_symmetric_matrix(S)
+    assertive::assert_is_identical_to_true(is.positive.semi.definite(S))
     
     # W.mod must be a real matrix and each indicators must be
     # linked to at least one composite and each composite at least to one indicator
-    assert_is_matrix(W.mod)
-    assert_all_are_real(W.mod)
+    assertive::assert_is_matrix(W.mod)
+    assertive::assert_all_are_real(W.mod)
     
     if(! all(apply(W.mod!=0,1,any))){
       print(W.mod)	
@@ -366,24 +372,24 @@ weight.pls <- function(S, model, W.mod,
     # a function
     if(! is.null(outerEstimators)){
       if(is.list(outerEstimators)){
-        assert_is_identical_to_true(length(outerEstimators) == nrow(W.mod))
+        assertive::assert_is_identical_to_true(length(outerEstimators) == nrow(W.mod))
         for(outerEstimator in outerEstimators){
-          assert_is_function(outerEstimator)
+          assertive::assert_is_function(outerEstimator)
         }
       }
       else{
-        assert_is_function(outerEstimators)
+        assertive::assert_is_function(outerEstimators)
       }
     }
     
     if(! is.null(innerEstimator)){
-      assert_is_function(innerEstimator)
+      assertive::assert_is_function(innerEstimator)
     }
-    # tol must be positive
-    assert_all_are_positive(tol)
+    # tol must be non negative
+    assertive::assert_all_are_non_negative(tol)
     
     #iter must not be negative
-    assert_all_are_positive(iter)
+    assertive::assert_all_are_non_negative(iter)
   }
   
   nativeModel <- parseModelToNativeFormat(model)
@@ -423,7 +429,9 @@ weight.pls <- function(S, model, W.mod,
   
   weightHistory <- matrix(NA,iter+1,sum(weightPattern))
   weightHistory[1,] <- W[weightPattern]
-  rownames(weightHistory) <- c("start",1:iter)
+  
+  if(iter > 0) rownames(weightHistory) <- c("start",1:iter)
+  else rownames(weightHistory) <- "start"
   
   
   # If we are not using an outer estimator, do not perform iterative estimation
@@ -446,10 +454,15 @@ weight.pls <- function(S, model, W.mod,
     
     repeat {
       
+      if(iteration == iter){
+        converged <- FALSE;
+        break;
+      }
+      
       # Get new inner weights from inner estimation
       
       if(! is.null(innerEstimator)){
-        E <- innerEstimator(S, W, inner.mod, ...)
+        E <- innerEstimator(S, W, inner.mod, model = model, ...)
       }
       
       # Get new weights from outer estimation
@@ -466,7 +479,7 @@ weight.pls <- function(S, model, W.mod,
         }
       }
       else{
-        W <- outerEstimators(S, W_old, E, W.mod, ...)
+        W <- outerEstimators(S, W_old, E, W.mod, model = model, ...)
       }	
       
       W <- scaleWeights(S, W)
@@ -480,10 +493,6 @@ weight.pls <- function(S, model, W.mod,
         converged <- TRUE
         break;
       }
-      else if(iteration == iter){
-        converged <- FALSE;
-        break;
-      }
       
     }
   }
@@ -491,6 +500,8 @@ weight.pls <- function(S, model, W.mod,
   # Mark the estimation as converged if not running iterations
   
   else converged <- TRUE	
+  
+  if(!converged) warning(paste("Iterative weight algorithm did not converge."))
   
   attr(W,"S") <- S
   attr(W,"E") <- E
@@ -595,15 +606,18 @@ weight.optim <- function(S, model, W.mod,
     
     optimCriterion(matrixpls.res)
   }, method = method, ...)
-
+  
   W[W.mod != 0] <- optim.res$par
   W <- scaleWeights(S, W)
   
+  if(optim.res$convergence) warning(paste("Weight optimization did not converge. Optim returned",optim.res$convergence))
+  
+  attr(W,"S") <- S
   attr(W,"iterations") <- optim.res$counts[1]
   attr(W,"converged") <- optim.res$convergence == 0
   attr(W,"history") <- NA
   class(W) <-("matrixplsweights")
-
+  
   return(W)
   
 }
@@ -675,7 +689,8 @@ weight.fixed <- function(S, model, W.mod = NULL,
   if(standardize){
     W <- scaleWeights(S,W)
   }
-  
+
+  attr(W,"S") <- S
   attr(W,"iterations") <- 0
   attr(W,"converged") <- TRUE
   attr(W,"history") <- W
@@ -832,44 +847,6 @@ params.tsls <- function(S, model, W, ...){
   return(params.internal_generic(S,model, W, 
                                  TwoStageLeastSquaresWithCovarianceMatrixAndModelPattern))
 }
-params.internal_generic <- function(S, model, W, pathEstimator){
-  
-  nativeModel <- parseModelToNativeFormat(model)
-  
-  results <- c()
-  
-  # Calculate the composite covariance matrix
-  C <- W %*% S %*% t(W)
-  
-  # Calculate the covariance matrix between indicators and composites
-  IC <- W %*% S
-  
-  innerRegressionIndices <- which(nativeModel$inner==1, useNames = FALSE)
-  
-  # Choose the specified values and add names
-  if(length(innerRegressionIndices)>0){
-    inner <- pathEstimator(C,nativeModel$inner)
-    innerVect <- inner[innerRegressionIndices]
-    names(innerVect) <- paste(rownames(inner)[row(inner)[innerRegressionIndices]],"~",
-                              colnames(inner)[col(inner)[innerRegressionIndices]], sep="")
-    
-    results <- c(results, innerVect)
-  }
-  else{
-    inner <- matrix(0,nrow(nativeModel$inner), ncol(nativeModel$inner))
-  }
-  
-  results <- c(results, params.internal_reflective(C, IC, nativeModel))
-  results <- c(results,	params.internal_formative(S, IC, nativeModel))
-  
-  # Store these in the result object
-  attr(results,"C") <- C
-  attr(results,"IC") <- IC
-  attr(results,"beta") <- inner
-  
-  return(results)
-}
-
 
 params.internal_generic <- function(S, model, W, pathEstimator){
   
@@ -879,7 +856,7 @@ params.internal_generic <- function(S, model, W, pathEstimator){
   
   # Calculate the composite covariance matrix
   C <- W %*% S %*% t(W)
-
+  
   # Calculate the covariance matrix between indicators and composites
   IC <- W %*% S
   
@@ -991,7 +968,7 @@ params.internal_reflective <- function(C, IC, nativeModel){
 inner.centroid <- function(S, W, inner.mod, ignoreInnerModel = FALSE, ...){
   
   # Centroid is just the sign of factor weighting
-
+  
   E <- sign(inner.factor(S, W, inner.mod, ignoreInnerModel, ...))
   
   return(E)
@@ -1086,6 +1063,51 @@ inner.factor <- function(S, W, inner.mod, ignoreInnerModel = FALSE, ...){
   return(E)
 } 
 
+#'@title PLS inner estimation with the Horst scheme
+#'
+#'@description
+#'Calculates a set of inner weights based on the Horst scheme.
+#
+#'@details
+#'In the Hosrt scheme, inner weights are unit weights for
+#'composites that are connected in the model specified in \code{inner.mod} and zero otherwise.
+#'
+#'Falls back to to identity scheme for composites that are not connected to any other composites.
+#'
+#'@param S Covariance matrix of the data.
+#'
+#'@param W Weight matrix, where the indicators are on colums and composites are on the rows.
+#'
+#'@param inner.mod A square matrix specifying the relationships of the composites in the model.
+
+#'@param ignoreInnerModel Should the inner model be ignored and all correlations be used.
+#'
+#'@param ... Other parameters are ignored
+#'
+#'@return A matrix of unscaled inner weights \code{E} with the same dimesions as \code{inner.mod}.
+#'
+#'@family inner estimators
+#'
+#'@references
+#'Tenenhaus, A., & Tenenhaus, M. (2011). Regularized Generalized Canonical 
+#'Correlation Analysis. Psychometrika, 76(2), 257–284. doi:10.1007/s11336-011-9206-8
+
+#'@export
+
+inner.Horst <- function(S, W, inner.mod, ignoreInnerModel = FALSE, ...){
+  
+  if(ignoreInnerModel){
+    E <- lower.tri(inner.mod) * 1
+  } 
+  else E <- inner.mod 
+  
+  # If we have LVs that are not connected to any other LVs, use identity scheme as fallback
+  diag(E)[rowSums(E) == 0] <- 1
+  
+  return(E)
+} 
+
+
 #'@title PLS inner estimation with the identity scheme
 #'
 #'@description
@@ -1124,23 +1146,9 @@ inner.identity <- function(S, W, inner.mod, ...){
 #'
 #'@description
 #'
-#'This implements the first step of the GSCA estimation describe by Hwang & Takane (2004). GSCA inner estimation should
-#'be used only with GSCA outer estimation. 
-#
-#'@details
+#'First step of the GSCA algorithm
 #'
-#'The first step of GSCA estimation method, as describe by Hwang & Takane (2004), involves estimating all model regressions,
-#'including also the relationships from composites toward indicators in the first step. 
-#'
-#'The implementation of GSCA in matrixpls differs from the Hwang & Takane (2004) version in that during the
-#'first step, only regressions between composites are estimated. The reason for this is that the
-#'relationhips from the composites to indicators are simple regressions that are simply the covariances between
-#'the indicators and compositess. Since these covariances need to be calculated in the second step, it is more
-#'efficient to not calculate them during the first step.
-#'
-#'This algorithm is therefore identical to the PLS path weighting scheme with the exception that correlations
-#'are not used for inverse relationships and there is no falling back to identity scheme for composites
-#'that are not connected to other composites.
+#'@template GSCA-details
 #'
 #'@inheritParams inner.centroid
 #'
@@ -1152,7 +1160,8 @@ inner.identity <- function(S, W, inner.mod, ...){
 #'@example example/gsca-example.R
 #'
 #'@family inner estimators  
-#'      
+#'@family GSCA functions
+#'
 #'@export
 
 inner.GSCA <- function(S, W, inner.mod, ...){
@@ -1164,6 +1173,8 @@ inner.GSCA <- function(S, W, inner.mod, ...){
   
   return(E)
 }
+
+
 
 # =========== Outer estimators ===========
 
@@ -1254,111 +1265,60 @@ outer.fixedWeights <- function(S, W, E, W.mod, ...){
   return(W.mod)
 }
 
-#'@title GSCA outer estimation
+
+#'@title RGCCA outer estimation (Experimental)
 #'
 #'@description
 #'
-#'This implements the second step of the GSCA estimation describe by Hwang & Takane (2004). GSCA outer estimation should
-#'be used only with GSCA inner estimation. 
+#'Implements the second step of the RGCCA estimation describe by Tenenhaus & Tenehaus (2011)
 #'
 #'@details
 #'
-#'The second step of GSCA estimation method, as describe by Hwang & Takane (2004), involves calculation of new
-#'weights given the regression estimates form the first step. In the second step, the following function is
-#'minimized (Hwang & Takane, 2004, eq. 7, first row):
-#'
-#'\deqn{SS(Z[V-\Lambda])}{SS(Z[V-Lambda])}
-#'
-#'Because \eqn{\Lambda}{Lambda} is defined as \eqn{WA}{WA}, the function to be minimized is
-#'identical to the first step function (Hwang & Takane, 2004, eq. 4, first row):
-#'
-#'\deqn{SS(ZV-ZWA)}{SS(ZV-ZWA)}
-#'
-#'In the second step, this function is minimized in respect to weights \eqn{W}{W} and \eqn{V}{V}.
-#'This involves estimating each regression ananalysis in the model including
-#'regressions between the composites and from composites to indicators and to minimize the sum of all OLS
-#'dicrepancy functions simultaneously. Because one weight can be included in many regressions, these equations
-#'must be estimated simultaneously. The minimization algoritm is the Nelder-Mead algorithm implemented in the
-#'\code{\link{optim}} function.
-#'
-#'The GSCA algoritm described by Hwang & Takane (2004) allows some indicators to be excluded from the second
-#'step, but in this implementation all indicators are always used so that each weight relation described in
-#'\code{W.mod} has always a corresponding regression relationship from a composite to a variable in the second
-#'step of GSCA estimation.
-#'
+#'The second step of RGCCA estimation method, as describe by Tenenhaus & Tenehaus (2011)
 #'@inheritParams outer.modeA
+#'
+#'@param tau The shrinkage parameter (0-1) 
 #'
 #'@return A matrix of unscaled outer weights \code{W} with the same dimesions as \code{W.mod}.
 #'
 #'@references
-#'Hwang, H., & Takane, Y. (2004). Generalized structured component analysis. \emph{Psychometrika}, 69(1), 81–99. doi:10.1007/BF02295841
+#'Tenenhaus, A., & Tenenhaus, M. (2011). Regularized Generalized Canonical 
+#'Correlation Analysis. Psychometrika, 76(2), 257–284. 
+#'doi:10.1007/s11336-011-9206-8
 #'
-#'@example example/gsca-example.R
+#'@example example/matrixpls.RGCCA-example.R
 #'
 #'@family outer estimators
 #'
 #'@export
 
-outer.GSCA <- function(S, W, E, W.mod, ...){
+
+outer.RGCCA <- function(S, W, E, W.mod, ..., tau = 1){
   
+  if(length(tau) == 1) tau <- rep(tau, nrow(W.mod))
+  else if(length(tau) != nrow(W.mod)) stop("Parameter tau of outer.RGCCA must be of length one or the number of composites.")
   
-  Wpattern <- W.mod!=0
+  # Calculate the covariance matrix between indicators and composites
+  IC <- E %*% W %*% S
   
-  # We will start by creating a function that returns the sum of squares of all the regressions
+  # Set up a weight pattern
+  W_new <- ifelse(W.mod==0,0,1)
   
-  ssFun <- function(Wvect){
+  # Do the outer model regressions
+  
+  for(row in which(rowSums(W_new)>0, useNames = FALSE)){
     
-    W[Wpattern] <- Wvect
+    indicatorIndices <- W_new[row,]==1
+    # Tikhonov matrix
+    Gamma <- tau[row] * diag(sum(indicatorIndices))
     
-    # Start by standardizing the weights because optim does not know that the
-    # weights must result in a composite with unit variance
+    # Ridge regression
+    W_new[row,indicatorIndices] <- solve(S[indicatorIndices,indicatorIndices] + t(Gamma) %*% Gamma,IC[row,indicatorIndices])
     
-    W <- scaleWeights(S, W)
-    
-    # Calculate the covariance matrix between indicators and composites
-    IC <- W %*% S
-    
-    # Calculate the composite covariance matrix
-    C <- IC %*% t(W)
-    
-    # Sum of squares from regressions from composites to indicators
-    
-    # Sum of squares is the sum of residual variances. For indicators, residual variance is the
-    # difference between covariance between the composite and the indicator variances. 
-    # we will take a sum of these 
-    
-    indicatorIndices <- col(W.mod)[Wpattern]
-    ss_indicators <-sum (diag(S)[indicatorIndices]-IC[Wpattern])
-    
-    # Sum of squares from regressions between composites
-    
-    # Sum of squares is the sum of residual variances. For composites, residual variance is 
-    # 1 - R2 and we will take a sum of these 
-    
-    R2 <- rowSums(E * C)
-    ss_composites <- sum(1-R2)
-    
-    return(ss_composites + ss_indicators)
-  }	
+  }
   
-  # The previous weights are used as starting values
+  return(W_new)
   
-  start <- W[Wpattern]
-  
-  # Then we will find the minimum using optim
-  
-  Wvect <- optim(start, ssFun)$par
-  
-  # Update the weights based on the estimated parameters
-  
-  W[Wpattern] <- Wvect
-  
-  # Finally standardize the weights because optim does not know that the
-  # weights must result in a composite with unit variance
-  
-  W <- scaleWeights(S, W)
-  
-  return(W)
 }
 
 #'@title Blockwise factor score outer estimation
@@ -1398,6 +1358,139 @@ outer.factor <- function(S, W, E, W.mod, fm="minres", ...){
   
   return(W_new)
 }
+
+#'@title GSCA outer estimation
+#'
+#'@description
+#'
+#'This implements the second step of the GSCA algorithm.
+#'
+#'@template GSCA-details
+#'
+#'@inheritParams outer.modeA
+#'
+#'@param model A matrixpls model. See \code{\link{matrixpls} for details}
+#'
+#'@return A matrix of unscaled outer weights \code{W} with the same dimesions as \code{W.mod}.
+#'
+#'@references
+#'Hwang, H., & Takane, Y. (2004). Generalized structured component analysis. \emph{Psychometrika}, 69(1), 81–99. doi:10.1007/BF02295841
+#'
+#'@example example/gsca-example.R
+#'
+#'@family outer estimators
+#'@family GSCA functions
+#'
+#'
+#'@export
+
+outer.GSCA <- function(S, W, E, W.mod, model, ...){
+  
+  nativeModel <- parseModelToNativeFormat(model)
+  
+  inner <- nativeModel$inner
+  
+  # Calculate the covariance matrix between indicators and composites
+  IC <- W %*% S
+  
+  # Estimate the reflective and formative parts of the model
+  
+  formative <- nativeModel$formative
+  
+  for(row in which(rowSums(formative!=0)>0)){
+    independents <- which(formative[row,] != 0)
+    formative[row,independents] <- solve(S[independents,independents],IC[row,independents])
+  }
+  
+  reflective <- nativeModel$reflective
+  
+  for(row in which(rowSums(reflective!=0)>0)){
+    independents <- which(reflective[row,] != 0)
+    reflective[row,independents] <- solve(S[independents,independents],IC[independents, row])
+  }  
+  
+  # E, formative, and reflective form the A matrix of GSCA. In this implementation,
+  # the full A matrix is never calculated, but we use the elements of 
+  # E, formative, and reflective directly.
+  
+  # Composite correlations implied by A
+  C <- W %*% S %*% t(W)
+  
+  # Update the weights one composite at a time
+  
+  for(row in 1:nrow(W.mod)){
+    
+    #
+    # In Hwang, H., & Takane, Y. (2004), the weights for one composite are
+    # defined by specifying a series of regression analyses where the
+    # indicators are independent variables. These regressions are then estimated
+    # simulataneously by stacking the data so that the system of equations
+    # can be estimated with OLS estimator in one go.
+    #
+    # This is equivalent to collecting all covariances between the IVs and
+    # DVs into a matrix and then taking a mean over all DVs so that we 
+    # have a vector of mean covariances for each IV. 
+    #
+    
+    # Indicator indices
+    i <- which(W.mod[row,]!=0)
+    
+    # correlations between the indicators and dvs
+    ic <- NULL
+    
+    # Calculate the covariance matrix between indicators and composites
+    # This needs to be recalculated for each composite because W is updated
+    # immediately
+    
+    IC <- E %*% W %*% S
+    
+    # The composite is dependent in inner model
+    
+    if(any(inner[row,]!=0)){
+      ic <- cbind(ic,IC[row,i])
+    }
+    
+    # Composites that this composite depends on
+    
+    for(j in which(inner[,row]!=0)){
+      ic <- cbind(ic,IC[j,i] * C[row,j])
+    }
+    
+    # The composite is dependent in the formative model
+    # and the weight pattern and formative indicators do not
+    # overlap completely
+    
+    if(any(formative[row,]!=0) && 
+         ! identical((formative[row,] ==0), (W.mod[row,] == 0))){
+      ic <- cbind(ic, W[row,i] %*% S[i,i])
+    }
+    
+    # Indicators that depend on this composite
+    
+    for(j in which(reflective[,row]!=0)){
+      ic <- cbind(ic, S[i,j])
+    }
+    
+    if(is.null(ic)) stop(paste("Composite '",rownames(inner)[row],
+                               "' is neither a dependent nor an independent variable in a GSCA outer model regressions. Estimation fails.",sep=""))
+    
+    Wvect <- solve(S[i,i],apply(ic,1,mean))
+    
+    # Update the weights based on the estimated parameters
+    
+    W[row,W.mod[row,]!=0] <- Wvect
+    
+    # Finally standardize the weights 
+    
+    W <- scaleWeights(S, W)
+    
+    
+    # Proceed to next composite
+  }
+  
+  return(W)
+}
+
 
 # =========== Optimization criterion functions ===========
 
@@ -1452,6 +1545,96 @@ optim.maximizePrediction <- function(matrixpls.res){
   C[!exog, !exog] <- endogC
   
   -sum(diag(reflective %*% C %*% t(reflective)))
+}
+
+
+#'@title GSCA optimization criterion
+#'
+#'@details Optimization criterion for maximixing the weighted sum of composite
+#'correlations
+#'
+#'@param matrixpls.res An object of class \code{matrixpls} from which the
+#'criterion function is calculated
+#'
+#'@inheritParams weight.pls
+#'
+#'@return Sum of residual variances.
+#'
+#'@family Weight optimization criteria
+#'
+#'@export
+#'
+#'@references
+#'
+#'Tenenhaus, A., & Tenenhaus, M. (2011). Regularized Generalized Canonical 
+#'Correlation Analysis. Psychometrika, 76(2), 257–284. doi:10.1007/s11336-011-9206-8
+#'
+
+optim.GCCA <- function(matrixpls.res, innerEstimator, ...){
+  
+  C <- attr(matrixpls.res,"C")
+  S <- attr(matrixpls.res,"S")
+  W <- attr(matrixpls.res,"W")
+  inner <- attr(matrixpls.res,"model")$inner.mod
+  
+  E <- function(S, W, inner.mod, ...)
+  
+  -sum(C * E)
+  
+}
+
+#'@title GSCA optimization criterion
+#'
+#'@details Optimization criterion for minimizing the sum of all residual
+#'variances in the model. 
+#'
+#'The matrixpls implementation of the GSCA criterion extends the criterion
+#'presented by Huang and Takane by including also the minimization of the
+#'residual variances of the formative part of the model. The formative
+#'regressions in a model are typically specified to be identical to the 
+#'weight pattern \code{W.mod} resulting zero residual variances by definition.
+#'However, it is possible to specify a formative model that does not completely
+#'overlap with the weight pattern leading to non-zero residuals that can be
+#'optimizes.
+#'
+#'@param matrixpls.res An object of class \code{matrixpls} from which the
+#'criterion function is calculated
+#'
+#'@return Sum of residual variances.
+#'
+#'@family Weight optimization criteria
+#'@family GSCA functions
+#'
+#'@export
+#'
+#'@references
+#'
+#'Hwang, H., & Takane, Y. (2004). Generalized structured component analysis. 
+#'Psychometrika, 69(1), 81–99. doi:10.1007/BF02295841
+#'
+
+optim.GSCA <- function(matrixpls.res){
+  
+  C <- attr(matrixpls.res,"C")
+  IC <- attr(matrixpls.res,"IC")
+  nativeModel <- attr(matrixpls.res,"model")
+  
+  reflective <- nativeModel$reflective
+  reflective[which(reflective==1)] <- matrixpls.res[grep("=~",names(matrixpls.res))]
+  
+  formative <- nativeModel$formative
+  formative[which(formative==1)] <- matrixpls.res[grep("<~",names(matrixpls.res))]
+  
+  f <- apply(nativeModel$formative != 0,1,any)
+  r <- apply(nativeModel$reflective != 0,1,any)
+  endo <- apply(nativeModel$inner != 0,1,any)
+  
+  inner_resid <- (1 - R2(matrixpls.res)[endo])
+  form_resid <- (1 - rowSums(IC[f,] * formative[f,]))
+  refl_resid <- (1 - rowSums(t(IC[,r]) * reflective[r,]))
+  
+  sum(inner_resid, form_resid, refl_resid)
+  
 }
 
 

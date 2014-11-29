@@ -2,7 +2,7 @@ Encoding: UTF-8
 Package: matrixpls
 Type: Package
 Title: Matrix-based Partial Least Squares estimation
-Version: 0.4.0
+Version: 0.5.0
 Date: 2014-10-23
 Authors@R: c(person("Mikko", "Rönkkö", role=c("aut", "cre"),
     email = "mikko.ronkko@aalto.fi"))
@@ -15,12 +15,13 @@ Description: matrixpls is implements Partial Least Squares Path Modeling
 URL: https://github.com/mronkko/matrixpls
 BugReports: https://github.com/mronkko/matrixpls/issues
 ByteCompile: TRUE
-Imports: assertive, matrixcalc, psych, lavaan, MASS
-Suggests: plspm, simsem, RUnit, parallel, semPLS, boot
+Imports: assertive, matrixcalc, lavaan, psych, MASS
+Suggests: plspm, simsem, RUnit, parallel, semPLS, boot, ASGSCA, RGCCA,
+        Matrix
 License: GPL-3
 LazyLoad: yes
-Packaged: 2014-10-24 07:05:44 UTC; mronkko
+Packaged: 2014-11-28 20:31:38 UTC; mronkko
 Author: Mikko Rönkkö [aut, cre]
 NeedsCompilation: no
 Repository: CRAN
-Date/Publication: 2014-10-24 10:56:49
+Date/Publication: 2014-11-29 07:59:50

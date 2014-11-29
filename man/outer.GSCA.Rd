@@ -3,7 +3,7 @@
 \alias{outer.GSCA}
 \title{GSCA outer estimation}
 \usage{
-outer.GSCA(S, W, E, W.mod, ...)
+outer.GSCA(S, W, E, W.mod, model, ...)
 }
 \arguments{
 \item{S}{Covariance matrix of the data.}
@@ -14,84 +14,144 @@ outer.GSCA(S, W, E, W.mod, ...)
 
 \item{W.mod}{A matrix specifying the weight relationships and their starting values.}
 
+\item{model}{A matrixpls model. See \code{\link{matrixpls} for details}}
+
 \item{...}{Other parameters are ignored}
 }
 \value{
 A matrix of unscaled outer weights \code{W} with the same dimesions as \code{W.mod}.
 }
 \description{
-This implements the second step of the GSCA estimation describe by Hwang & Takane (2004). GSCA outer estimation should
-be used only with GSCA inner estimation.
+This implements the second step of the GSCA algorithm.
 }
 \details{
-The second step of GSCA estimation method, as describe by Hwang & Takane (2004), involves calculation of new
-weights given the regression estimates form the first step. In the second step, the following function is
-minimized (Hwang & Takane, 2004, eq. 7, first row):
+The two step GSCA algorithm is designed to minimize.
 
-\deqn{SS(Z[V-\Lambda])}{SS(Z[V-Lambda])}
+\code{SS(ZV-ZWA)}
 
-Because \eqn{\Lambda}{Lambda} is defined as \eqn{WA}{WA}, the function to be minimized is
-identical to the first step function (Hwang & Takane, 2004, eq. 4, first row):
+The parameter matrix \code{A} contains all model parameters including
+\code{inner}, reflective \code{inner}, and \code{formative}. The weight
+matrices \code{V} and \code{W}, which can contain duplicate elements,
+contain the indicator weights.
 
-\deqn{SS(ZV-ZWA)}{SS(ZV-ZWA)}
+The first step of GSCA estimation method is calculation of regressions
+coefficients \code{A} given weights \code{W} and \code{V}. The function
+\code{\link{inner.GSCA}} update the part of \code{A} corresponding to
+regressions between the composites, corresponding to \code{E} matrix in
+matrixpls. The regressions between composites and indicators are estimated
+in \code{\link{outer.GSCA}}.
 
-In the second step, this function is minimized in respect to weights \eqn{W}{W} and \eqn{V}{V}.
-This involves estimating each regression ananalysis in the model including
-regressions between the composites and from composites to indicators and to minimize the sum of all OLS
-dicrepancy functions simultaneously. Because one weight can be included in many regressions, these equations
-must be estimated simultaneously. The minimization algoritm is the Nelder-Mead algorithm implemented in the
-\code{\link{optim}} function.
+This algorithm for estimating the relationships between the composites
+is therefore identical to the PLS path weighting scheme with
+the exception that correlations are not used for inverse relationships and
+there is no falling back to identity scheme for composites that are not
+connected to other composites
+The second step of GSCA is calculating a new set of weights conditional on
+the regression coeffcients \code{A} to minimize the sum of error terms in
+the regressions. This step is implemented in \code{\link{outer.GSCA}} after
+updating the regresions between indicators and composites.
+The implementation of GSCA in matrixpls differs from the Hwang & Takane (2004)
+version in that during the first step, only regressions between composites are
+estimated. The regressions between composites and indicators are estimated by
+the second stage
+the indicators and compositess. Since these covariances need to be calculated in the second step, it is more
+efficient to not calculate them during the first step.
 
-The GSCA algoritm described by Hwang & Takane (2004) allows some indicators to be excluded from the second
-step, but in this implementation all indicators are always used so that each weight relation described in
-\code{W.mod} has always a corresponding regression relationship from a composite to a variable in the second
-step of GSCA estimation.
+The matrixpls implementation of the GSCA algorithm extends the criterion
+presented by Hwang and Takane (2004) by including also the minimization of the
+residual variances of the formative part of the model. The formative
+regressions in a model are typically specified to be identical to the
+weight pattern \code{W.mod} resulting zero residual variances by definition.
+However, it is possible to specify a formative model that does not completely
+overlap with the weight pattern leading to non-zero residuals that can be
+optimized.
 }
 \examples{
-# Run the example from plspm package using GSCA estimation
+# Run the example from ASGSCA package using GSCA estimation
 
-if(require(plspm)) {
+ if(require(ASGSCA)) {
   
-  # Run the customer satisfaction examle form plspm
+  # Run the GSCA example from the ASGSCA package
   
-  # load dataset satisfaction
-  data(satisfaction)
-  # inner model matrix
-  IMAG = c(0,0,0,0,0,0)
-  EXPE = c(1,0,0,0,0,0)
-  QUAL = c(0,1,0,0,0,0)
-  VAL = c(0,1,1,0,0,0)
-  SAT = c(1,1,1,1,0,0)
-  LOY = c(1,0,0,0,1,0)
-  inner = rbind(IMAG, EXPE, QUAL, VAL, SAT, LOY)
-  colnames(inner) <- rownames(inner)
+  #Scenario (g) in Romdhani et al. (2014): 4 SNPs mapped to 2 genes and 4 
+  #traits involved in 2 clinical pathways 
+  #In total: 8 observed variables and 4 latent variables.
+  #One of the traits is involved in both clinical pathways.
+  #One gene is connected to one of the clinical pathways and
+  #the other to both of them.
   
-  # Reflective model
-  list(1:5, 6:10, 11:15, 16:19, 20:23, 24:27)
+  data(GenPhen)
+  W0 <- matrix(c(rep(1,2),rep(0,8),rep(1,2),rep(0,8),rep(1,3),rep(0,7),rep(1,2)),nrow=8,ncol=4)
+  B0 <- matrix(c(rep(0,8),rep(1,2),rep(0,3),1,rep(0,2)),nrow=4,ncol=4)
   
-  reflective<- matrix(
-    c(1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0,
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1),
-    27,6, dimnames = list(colnames(satisfaction)[1:27],colnames(inner)))
+  #Estimation only
+  GSCA.res <- GSCA(GenPhen,W0, B0,estim=TRUE,path.test=FALSE, 
+                   latent.names=c("Gene1","Gene2","Clinical pathway 1","Clinical pathway 2"))
   
-  # empty formative model
+  # Setup matrixpls to estimate the same model. Note GSCA places dependent variables
+  # on columns but matrixpls uses rows for dependent variables
   
-  formative <- matrix(0, 6, 27, dimnames = list(colnames(inner), colnames(satisfaction)[1:27]))
+  inner <- t(B0)
+  reflective <- matrix(0,8,4)
+  formative <- t(W0)
   
-  # Estimation using covariance matrix and the GSCA estimators
+  colnames(formative) <- rownames(reflective) <- names(GenPhen)
+  colnames(inner) <- rownames(inner) <- rownames(formative) <- colnames(reflective) <-
+    c("Gene1","Gene2","Clinical pathway 1","Clinical pathway 2")
   
-  print(matrixpls(cov(satisfaction[,1:27]),  model = list(inner = inner,
-                                                    reflective = reflective,
-                                                    formative = formative),
-            outerEstimators = outer.GSCA,
-            innerEstimator = inner.GSCA))
+  model <- list(inner = inner, 
+                reflective = reflective,
+                formative = formative)
+    
+  # Estimate using alternating least squares
+  
+  matrixpls.res1 <- matrixpls(cov(GenPhen),  model,
+                              outerEstimators = outer.GSCA,
+                              innerEstimator = inner.GSCA,
+                              tol = 0.000000000001)
+
+  print("Comparing alternating least squares estimates to original estimats")
+  # Compare thw weights
+  print(GSCA.res$Weight)
+  print(t(attr(matrixpls.res1,"W")))
+
+  print(GSCA.res$Weight - t(attr(matrixpls.res1,"W")))
+  
+  
+  # Compare the paths
+  print(GSCA.res$Path)
+  print(t(attr(matrixpls.res1,"beta")))
+  
+  print(GSCA.res$Path-t(attr(matrixpls.res1,"beta")))
+  
+  # Estimate using direct minimization of the estimation criterion
+  
+  matrixpls.res2 <- matrixpls(cov(GenPhen),  model,
+                              weightFunction = weight.optim,
+                              optimCriterion = optim.GSCA)
+
+  print("Comparing numeric minimization estimates to original estimats")
+  
+  # Compare thw weights
+  print(GSCA.res$Weight)
+  print(t(attr(matrixpls.res2,"W")))
+  
+  print(GSCA.res$Weight - t(attr(matrixpls.res2,"W")))
+  
+  
+  # Compare the paths
+  print(GSCA.res$Path)
+  print(t(attr(matrixpls.res2,"beta")))
+  
+  print(GSCA.res$Path-t(attr(matrixpls.res2,"beta")))
+  
+  
+  # Check the criterion function values
+  print(optim.GSCA(matrixpls.res1))
+  print(optim.GSCA(matrixpls.res2))
   
 } else{
-  print("This example requires the plspm package")
+  print("This example requires the ASGSCA package")
 }
 
 }
@@ -99,7 +159,11 @@ if(require(plspm)) {
 Hwang, H., & Takane, Y. (2004). Generalized structured component analysis. \emph{Psychometrika}, 69(1), 81–99. doi:10.1007/BF02295841
 }
 \seealso{
-Other outer estimators: \code{\link{outer.factor}};
+Other GSCA functions: \code{\link{inner.GSCA}};
+  \code{\link{optim.GSCA}}
+
+Other outer estimators: \code{\link{outer.RGCCA}};
+  \code{\link{outer.factor}};
   \code{\link{outer.fixedWeights}};
   \code{\link{outer.modeA}}; \code{\link{outer.modeB}}
 }
