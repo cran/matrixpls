@@ -29,25 +29,26 @@
 #'
 #'@param fitIndices A function that returns a list of fit indices for the model. Setting this argument to \code{NULL} disables fit indices.
 #'
-#'@return An object of class \code{\link[simsem]{SimResult-class}}.
+#'@param prefun A function to be applied to the dataset before each replication. The output of this
+#'function is passed as arguments to \code{\link{matrixpls}}
 #'
-
-#'@param outfun A function to be applied to the matrixpls output at each replication. 
+#'@param outfun A function to be applied to the  \code{matrixpls} output at each replication. 
 #'Output from this function in each replication will be saved in the simulation 
-#'output (SimResult),
-# and can be obtained using the getExtraOutput function.
+#'output (SimResult), and can be obtained using the getExtraOutput function.
 
-#'@param outfundata A function to be applied to the matrixpls output and the 
-#'generated data at each replication. Users can get the characteristics of the 
+#'@param outfundata A function to be applied to the \code{matrixpls} output and the 
+#'generated data after each replication. Users can get the characteristics of the 
 #'generated data and also compare the characteristics with the generated output. 
 #'The output from this function in each replication will be saved in the 
 #'simulation output (SimResult), and can be obtained using the getExtraOutput function.
-
+#'
 #'@inheritParams simsem::sim
 #'
-# @example example/matrixpls.sim-example.R
+#'@return An object of class \code{\link[simsem]{SimResult-class}}.
+#'
+#'@example example/fragment-requireSimsem.R
 #'@example example/matrixpls.sim-example2.R
-# @example example/matrixpls.plsc-example2.R
+#'@example example/fragment-endBlock.R
 #'
 #'@seealso
 #'
@@ -61,15 +62,16 @@
 matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.95,
                           citype=c("norm","basic", "stud", "perc", "bca"), 
                           boot.R = 500, fitIndices = fitSummary,
-                          outfundata = NULL, outfun = NULL){
+                          outfundata = NULL, outfun = NULL,
+                          prefun = NULL){
   
   if(! requireNamespace("simsem")) stop("matrixpls.sim requires the simsem package")
   
   
   # Basic verification of the arguments
-  if(boot.R != FALSE)	assert_all_are_positive(boot.R)	
-  assert_all_are_positive(cilevel)
-  assert_all_are_true(cilevel<1)
+  if(boot.R != FALSE)	assertive::assert_all_are_positive(boot.R)	
+  assertive::assert_all_are_positive(cilevel)
+  assertive::assert_all_are_true(cilevel<1)
   citype <- match.arg(citype)
   
   # Decide which arguments to route to simsem and which to matrispls.boot
@@ -90,11 +92,11 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     
     # Derive a SimSem model from lavaan parameter table by fitting a model to a diagonal matrix
     
-    cvMat <- diag(nrow(nativeModel$reflective))
-    colnames(cvMat) <- rownames(cvMat) <- rownames(nativeModel$reflective)
-    fit <- lavaan::lavaan(model, sample.cov = cvMat, sample.nobs = 100)
-    simsemArgs$generate <- simsem::model.lavaan(fit)
-    
+#    cvMat <- diag(nrow(nativeModel$reflective))
+#    colnames(cvMat) <- rownames(cvMat) <- rownames(nativeModel$reflective)
+#    fit <- lavaan::lavaan(model, sample.cov = cvMat, sample.nobs = 100)
+#    simsemArgs$generate <- simsem::model.lavaan(fit)
+    simsemArgs$generate <- model
   }
   
   if(!"W.mod" %in% names(matrixplsArgs)) matrixplsArgs$W.mod<- defaultWeightModelWithModel(model)
@@ -112,7 +114,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
   if(is.character(model)) {
     # Remove all multigroup specifications because we do not support multigroup analyses
     model <- gsub("c\\(.+?\\)","NA",model)
-    partable <- lavaanify(model)
+    partable <- lavaan::lavaanify(model)
   } else if (is.partable(model)) {
     partable <- model
   } else if (is(model, "lavaan")) {
@@ -158,19 +160,25 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
   
   
   modelFun  <- function(data){
-    
+
     # Indices for parameters excluding weights
     
     parameterIndices <- 1:(sum(nativeModel$inner) + sum(nativeModel$reflective) + sum(nativeModel$formative))
+
     
     # Convert the data to matrix for efficiency
-    
     if(boot.R == FALSE){
       S <- cov(data)
-      matrixpls.res <- do.call(matrixpls, c(list(S), matrixplsArgs))
+      
+      if(! is.null(prefun)){
+        extraArgs <- prefun(data)
+      }
+      else extraArgs <- list()
+      
+      matrixpls.res <- do.call(matrixpls, c(list(S), matrixplsArgs,extraArgs))
     }
     else{
-      boot.out <- do.call(matrixpls.boot, c(list(as.matrix(data)), matrixplsArgs))
+      boot.out <- do.call(matrixpls.boot, c(list(as.matrix(data)), matrixplsArgs, list(prefun = prefun)))
       matrixpls.res  <- boot.out$t0
     }
     
@@ -196,8 +204,8 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
       # solution. We need to calculate the explained variances of the endogenous composites
       
       else{
-        beta <- attr(matrixpls.res,"beta")
-        if(any(diag(beta%*%C%*%t(beta)) > 1)){
+        inner <- attr(matrixpls.res,"inner")
+        if(any(diag(inner%*%C%*%t(inner)) > 1)){
           converged <- 4
         }
       }
@@ -223,6 +231,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
       R <- sign(r) * r^2
       names(R) <- colnames(lvScores)
       attr(matrixpls.res, "R") <- R
+      
     }
     
     # Store CIs and SEs if bootstrapping was done
@@ -241,6 +250,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
       
       ses <- apply(boot.out$t[,parameterIndices],2,sd)
       names(ses) <- names(ret[["coef"]])
+      colnames(cis) <- names(ret[["coef"]])
       
       ret <- c(ret, list(se = ses,
                          cilower = cis[1,],
@@ -257,7 +267,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
       
     }
     if(! is.null(fitIndices)){
-      assert_is_function(fitIndices)
+      assertive::assert_is_function(fitIndices)
       fitlist <- unlist(fitIndices(matrixpls.res))
       ret$fit <- fitlist
     }
@@ -276,47 +286,11 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     return(ret)
   }
   
-  simsemArgs <- c(list(nRep = nRep, model = modelFun, n = n, saveLatentVar = TRUE, 
+  simsemArgs <- c(list(nRep = nRep, model = modelFun, n = n,
                        outfun = function(x){x$extra}),
                   simsemArgs)
-  
+
   ret <- do.call(simsem::sim, simsemArgs)
   
   ret
-}
-
-#'@title Summary of model fit of PLS model
-#'
-#'@description
-#'
-#'\code{fitSummary} computes a list of statistics
-#'that are commonly used to access the overall fit of the PLS model.
-#'
-#'@param object PLS estimation result object produced by the \code{\link{matrixpls}} function.
-#'
-#'@return A list containing a selection of fit indices.
-#'
-#'@include matrixpls.postestimation.R
-#'
-#'@export
-#'
-
-fitSummary <- function(object){
-  
-  ret <- list("Min CR" = min(CR(object)),
-              "Min AVE" = min(AVE(object)$AVE),
-              "Min AVE - sq. cor" = min(AVE(object)$AVE_correlation),
-              "Goodness of Fit" = GoF(object),
-              SRMR = residuals(object)$indices$SRMR,
-              "Henseler's SRMR" = residuals(object)$indices$SRMR_Henseler)
-  
-  class(ret) <- "matrixplfitsummary"
-  ret
-}
-
-#'@S3method print matrixplfitsummary
-
-print.matrixplfitsummary <- function(x, ...){
-  cat("\n Summary indices of model fit\n")
-  print(data.frame(Value = unlist(x)), ...)
 }

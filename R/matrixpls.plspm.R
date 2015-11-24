@@ -29,7 +29,10 @@
 #'\code{\link[plspm]{plspm}}
 #'
 #'@export
+#'@example example/fragment-requirePlspm.R
 #'@example example/matrixpls.plspm-example.R
+#'@example example/fragment-endBlock.R
+
 
 matrixpls.plspm <-
   function(Data, path_matrix, blocks, modes = NULL, scheme = "centroid", 
@@ -85,10 +88,10 @@ matrixpls.plspm <-
                         reflective=reflective, 
                         formative=formative) 
     
-    W.mod <- t(reflective)
+    W.model <- t(reflective)
     
-    if(params$plsr) parameterEstimator <- params.plsregression
-    else parameterEstimator <- params.regression
+    if(params$plsr) paramsInner <- estimator.plsreg
+    else paramsInner <- estimator.plsreg
     
     modeA <- params$modes == "A"
     
@@ -143,7 +146,7 @@ matrixpls.plspm <-
         }
         
         tryCatch(
-          matrixpls(S_boot, model = nativeModel, W.mod = W.mod, parameterEstimator = parameterEstimator,
+          matrixpls(S_boot, model = nativeModel, W.model = W.model, paramsInner = paramsInner,
                     outerEstimators = outerEstimators, innerEstimator = innerEstimator,
                     tol = params$tol, iter = params$maxiter, convCheck = convCheck,
                     validateInput = FALSE, standardize = FALSE), 
@@ -152,14 +155,14 @@ matrixpls.plspm <-
             print(e)
             print(S)
             print(nativeModel)
-            print(W.mod)
+            print(W.model)
           })
       }, params$br)
       
       matrixpls.res <- boot.res$t0
     }
     else{
-      matrixpls.res <- matrixpls(S, model = nativeModel, W.mod = W.mod, parameterEstimator = parameterEstimator,
+      matrixpls.res <- matrixpls(S, model = nativeModel, W.model = W.model, paramsInner = paramsInner,
                                  outerEstimators = outerEstimators, innerEstimator = innerEstimator,
                                  tol = params$tol, iter = params$maxiter, convCheck = convCheck,
                                  validateInput = FALSE, standardize = FALSE)
@@ -172,13 +175,13 @@ matrixpls.plspm <-
     C <- attr(matrixpls.res,"C") 
     IC <- attr(matrixpls.res,"IC")
     W <- attr(matrixpls.res,"W") 
-    beta <- attr(matrixpls.res,"beta")
+    inner <- attr(matrixpls.res,"inner")
     
     IC_std <- IC %*% (diag(1/sqrt(diag(S))))
     colnames(IC_std) <- colnames(IC)
     
     # Inner model R2s
-    R2 <- R2(matrixpls.res)
+    R2 <- r2(matrixpls.res)
     class(R2) <- "numeric"
     
     # PLSPM does LV score scaling differently, so we need a correction
@@ -223,16 +226,16 @@ matrixpls.plspm <-
     
     rownames(outer.mod.dataframe) <- NULL
     
-    lvScoreFittedValues <- lvScores_std %*% t(beta)
+    lvScoreFittedValues <- lvScores_std %*% t(inner)
     intercepts <- apply(lvScores_std-lvScoreFittedValues,2,mean)
     
     inner.mod <- sapply(lvNames[!exogenousLVs], function(lvName){
       
       # Recalculate the regressions to get standard errors and intercepts
       row <- which(lvNames == lvName)
-      regressors <- beta[row,]!=0
+      regressors <- inner[row,]!=0
       
-      beta <- c(intercepts[lvName],beta[row,regressors]) 
+      inner <- c(intercepts[lvName],inner[row,regressors]) 
       
       # Calculating of SEs adapted from mat.regress from the psych package
       
@@ -240,14 +243,14 @@ matrixpls.plspm <-
         uniq <- 1
       }
       else{
-        uniq <- (1-smc(C[regressors,regressors]))
+        uniq <- (1-psych::smc(C[regressors,regressors]))
       }
       df <- nrow(params$x)-sum(regressors)-1
       se <- sqrt((1-R2[row])/(df))*c(1,sqrt(1/uniq))
-      tvalue <- beta/se
+      tvalue <- inner/se
       prob <- 2*(1- pt(abs(tvalue),df))
       
-      ret <- cbind(beta, se, tvalue, prob)
+      ret <- cbind(inner, se, tvalue, prob)
       
       rownames(ret) <- c("Intercept",lvNames[regressors])
       colnames(ret) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
@@ -263,7 +266,7 @@ matrixpls.plspm <-
     if(params$boot.val){
       
       pathCount <- sum(nativeModel$inner)
-      weightCount <- sum(W.mod)
+      weightCount <- sum(W.model)
       bootPathIndices <- 1:pathCount
       bootLoadingIndices <- 1:weightCount + pathCount
       bootWeightIndices <- bootLoadingIndices + weightCount
@@ -271,7 +274,7 @@ matrixpls.plspm <-
       bootIndices <- boot::boot.array(boot.res, indices = TRUE)
       
       boot <- list(weights = get_bootDataFrame(boot.res$t0[bootWeightIndices]*sdv, boot.res$t[,bootWeightIndices]*sdv, rownames(S)),
-                   loadings = get_bootDataFrame(IC_std[W.mod == 1], 
+                   loadings = get_bootDataFrame(IC_std[W.model == 1], 
                                                 t(parallel::mcmapply(function(x){
                                                   
                                                   # Recover the data that were used in the bootrap replications and calculate indicator variances
@@ -294,14 +297,14 @@ matrixpls.plspm <-
                                                S <- cov(dataToUse[bootIndices[x,],])
                                              
                                              # Reconstruct the matrices
-                                             W <- matrix(0,nrow(W.mod),ncol(W.mod))
-                                             W[W.mod==1] <- boot.res$t[x,bootWeightIndices]
+                                             W <- matrix(0,nrow(W.model),ncol(W.model))
+                                             W[W.model==1] <- boot.res$t[x,bootWeightIndices]
                                              C <- W %*% S %*% t(W)
-                                             beta <- matrix(0,nrow(nativeModel$inner),ncol(nativeModel$inner))
-                                             beta[nativeModel$inner == 1] <- boot.res$t[x,bootPathIndices]
+                                             inner <- matrix(0,nrow(nativeModel$inner),ncol(nativeModel$inner))
+                                             inner[nativeModel$inner == 1] <- boot.res$t[x,bootPathIndices]
                                              
                                              # Calculate R2 values
-                                             rowSums(beta[!exogenousLVs,]*C[!exogenousLVs,])
+                                             rowSums(inner[!exogenousLVs,]*C[!exogenousLVs,])
                                              
                                            },1:params$br)),
                                            lvNames[!exogenousLVs]),
@@ -311,14 +314,15 @@ matrixpls.plspm <-
                    total.efs = get_bootDataFrame(effects(matrixpls.res)$Total[pathIndices[-1,]],
                                                  t(parallel::mcmapply(function(x){
                                                    
-                                                   beta <- matrix(0,nrow(nativeModel$inner),ncol(nativeModel$inner))
-                                                   beta[nativeModel$inner == 1] <- boot.res$t[x,bootPathIndices]
+                                                   inner <- matrix(0,nrow(nativeModel$inner),ncol(nativeModel$inner))
+                                                   inner[nativeModel$inner == 1] <- boot.res$t[x,bootPathIndices]
+
+                                                   # Create a face matrixpls object to calculate total effects
                                                    
-                                                   obj <- c()
+                                                   obj <- numeric()
                                                    class(obj) <- "matrixpls"
-                                                   attr(obj,"beta") <- beta
-                                                   attr(obj,"model") <- nativeModel$inner
-                                                   
+                                                   attr(obj,"inner") <- inner
+                                                   attr(obj,"model") <- nativeModel
                                                    effects.matrixpls(obj)$Total[pathIndices[-1,]]
                                                    
                                                  },1:params$br)),
@@ -392,17 +396,17 @@ matrixpls.plspm <-
                           direct = effs$Direct[pathIndices[-1,]],
                           indirect = effs$Indirect[pathIndices[-1,]], 
                           total = effs$Total[pathIndices[-1,]])
-    
+
     unidim <- data.frame(Mode = params$modes,
                          MVs = blocks,
                          C.alpha = ifelse(params$modes == "A",
                                           sapply(params$outer,function(indices){
-                                            alpha(S[indices,indices])$total[[2]]
+                                            psych::alpha(S[indices,indices])$total[[2]]
                                           }, simplify = TRUE),
                                           0),
                          DG.rho = ifelse(params$modes == "A",
                                          sapply(params$outer,function(indices){
-                                           pc <- principal(S[indices,indices])
+                                           pc <- psych::principal(S[indices,indices])
                                            std.loads <- pc$loadings
                                            numer.rho <- sum(std.loads)^2
                                            denom.rho <- numer.rho + (length(indices) - sum(std.loads^2))
@@ -419,7 +423,7 @@ matrixpls.plspm <-
     
     # Goodness of Fit is square root of product of mean communality and mean R2
     
-    gof <- GoF(matrixpls.res)
+    gof <- gof(matrixpls.res)
     class(gof) <- "numeric"
     
     # Crossloadings are the IC matrix
@@ -429,7 +433,7 @@ matrixpls.plspm <-
     
     res = list(outer_model = outer.mod.dataframe, 
                inner_model = inner.mod, 
-               path_coefs = beta, 
+               path_coefs = inner, 
                scores = lvScores_std,
                crossloadings = crossloadings,
                inner_summary = inner.sum, 
@@ -453,122 +457,6 @@ matrixpls.plspm <-
     
   }
 
-
-
-
-
-# =========== Parameter estimators ===========
-
-#'@title Parameter estimation with PLS regression
-#'
-#'@description
-#'Estimates the model parameters with weighted composites using separate OLS regressions for outer
-#'model and separate PLS regressions for inner model.
-#'
-#'@details
-#'
-#'\code{params.plsregression} estimates the model parameters similarly to \code{\link{params.regression}}
-#'with the exception that instead of separate OLS regressions the \code{inner} part of
-#'the model is estimated with separate PLS regressions using the PLS1 algorithm with two rounds
-#'of estimation.
-#'
-#'The implementation of PLS regression is ported from the raw data version implemented in \code{\link[plspm]{get_plsr1}}
-#'funtion of the \code{plspm} package.
-#'
-#'@inheritParams params.regression
-#'@inheritParams matrixpls
-#
-#'@return A named vector of parameter estimates.
-#'
-#'@family parameter estimators
-#'
-#'
-#'@references
-#'
-#'Sanchez, G. (2013). \emph{PLS Path Modeling with R.} Retrieved from http://www.gastonsanchez.com/PLS Path Modeling with R.pdf
-#'
-#'Bjørn-Helge Mevik, & Ron Wehrens. (2007). The pls Package:  Principal Component and Partial Least Squares Regression in R. \emph{Journal of Statistical Software}, 18. Retrieved from http://www.jstatsoft.org/v18/i02/paper
-
-#'@export
-
-params.plsregression <- function(S, W, model){
-  
-  return(params.internal_generic(S,W,model,
-                                 plsregressionsWithCovarianceMatrixAndModelPattern))
-  
-}
-
-# =========== Utility functions ===========
-
-plsregressionsWithCovarianceMatrixAndModelPattern <- function(S,model){
-  
-  assert_is_symmetric_matrix(S)
-  
-  for(row in 1:nrow(model)){
-    
-    independents <- which(model[row,]!=0)
-    
-    if(length(independents)>0){
-      vars <- c(row,independents)
-      coefs <- get_plsr1(S[vars,vars])
-      model[row,independents] <- coefs
-    }
-  }
-  
-  return(model)
-  
-}
-
-#
-# Run PLS regression. Ported from PLSPM
-#
-
-get_plsr1 <-function(C, nc=NULL, scaled=TRUE)
-{
-  # ============ checking arguments ============
-  p <- ncol(C)
-  if (is.null(nc))
-    nc <- p
-  # ============ setting inputs ==============
-  if (scaled) C <- cov2cor(C)
-  C.old <- C
-  
-  Ph <- matrix(NA, p, nc)# matrix of X-loadings
-  Wh <- matrix(NA, p, nc)# matrix of raw-weights
-  ch <- rep(NA, nc)# vector of y-loadings
-  
-  # ============ pls regression algorithm ==============
-  
-  for (h in 1:nc)
-  {
-    # Covariancese between the independent and dependent vars
-    w.old <- C[2:nrow(C),1]
-    w.new <- w.old / sqrt(sum(w.old^2)) # normalization
-    
-    # Covariances between the component and the variables
-    cv.new <- C %*% c(0,w.new)
-    
-    # Covariances between the independents and the component
-    p.new <- cv.new[1]
-    
-    # Covariance between the dependent and the component
-    c.new <- cv.new[2:length(cv.new)]
-    
-    # Deflation
-    C.old <- C.old - cv.new
-    
-    Ph[,h] <- p.new
-    Wh[,h] <- w.new
-    ch[h] <- c.new
-    
-    
-  }
-  Ws <- Wh %*% solve(t(Ph)%*%Wh)# modified weights
-  Bs <- as.vector(Ws %*% ch) # std beta coeffs    
-  Br <- Bs * C[1,1]/diag(C)[2:nrow(C)]   # beta coeffs
-  
-  return(Br)
-}
 
 #
 # Validate parameters. Copied from PLSPM
