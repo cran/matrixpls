@@ -117,7 +117,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     partable <- lavaan::lavaanify(model)
   } else if (is.partable(model)) {
     partable <- model
-  } else if (is(model, "lavaan")) {
+  } else if (methods::is(model, "lavaan")) {
     partable <- model@ParTable
   }
   
@@ -168,7 +168,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     
     # Convert the data to matrix for efficiency
     if(boot.R == FALSE){
-      S <- cov(data)
+      S <- stats::cov(data)
       
       if(! is.null(prefun)){
         extraArgs <- prefun(data)
@@ -191,7 +191,11 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
     # 4: At least one variance estimate is negative
     # 5: At least one correlation estimate is greater than 1 or less than -1
     
-    if(attr(matrixpls.res,"converged")){
+    # Non-iterative weight functiosn do not return convergence status so both NULL
+    # and TRUE are considered as converged
+    
+    if(is.null(attr(matrixpls.res,"converged")) ||
+       attr(matrixpls.res,"converged")){
       
       converged <- 0
       
@@ -225,7 +229,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
       # The latent vars and composites should be in the same order. 
       trueScores <- as.matrix(latentVar[,1:ncol(lvScores)])
       
-      r <- diag(cor(lvScores,trueScores))
+      r <- diag(stats::cor(lvScores,trueScores))
       
       # Keep the sign of the correlation when calculating reliabilities
       R <- sign(r) * r^2
@@ -248,7 +252,7 @@ matrixpls.sim <- function(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.
         cis[,ncol(cis)-1:0]
       })
       
-      ses <- apply(boot.out$t[,parameterIndices],2,sd)
+      ses <- apply(boot.out$t[,parameterIndices],2,stats::sd)
       names(ses) <- names(ret[["coef"]])
       colnames(cis) <- names(ret[["coef"]])
       
