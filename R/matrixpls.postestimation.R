@@ -74,7 +74,7 @@ print.matrixplseffects <- function(x, ...){
 #'
 #'@template postestimationFunctions
 #'
-#'@param observed If \code{TRUE} (default) the observed residuals from the outer model regressions
+#'@param observed If \code{TRUE} (default) the observed residuals from the outerEstim.model regressions
 #'(indicators regressed on composites) are returned. If \code{FALSE}, the residuals are calculated
 #'by combining  \code{inner}, \code{reflective}, and \code{formative} as a simultaneous equations
 #'system and subtracting the covariances implied by this system from the observed covariances.
@@ -105,15 +105,14 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
   
   RMS <- function(num) sqrt(sum(num^2)/length(num))
   
-  
+  S <- attr(object,"S")
+  nativeModel <- attr(object,"model")
   
   # Equation numbers in parenthesis refer to equation number in Lohmoller 1989
   
   if(observed){
-    nativeModel <- attr(object,"model")
     
     W <- attr(object,"W")
-    S <- attr(object,"S")
     
     # Number of reflective indicators
     reflectiveIndicators<- rowSums(nativeModel$reflective)>0
@@ -160,7 +159,7 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
     Q <- (W %*% S %*% t(W))[endog,endog] - R_star
     
     
-    indices <- list(Communality = psych::tr(H2)/k, # eq 2.109
+    indices <- c(Communality = psych::tr(H2)/k, # eq 2.109
                     Redundancy = psych::tr(F2)/k,  # eq 2.110
                     SMC = sum(r2)/h,         # eq 2.111
                     "RMS outer residual covariance" = RMS(C[lower.tri(C)]), # eq 2.118
@@ -169,12 +168,12 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
   }
   else{
     C <- S-stats::fitted(object)
-    indices <- list()
+    indices <- c()
   }
   
   C_std <- diag(1/diag(S)) %*% C
   
-  indices <- c(indices,list(
+  indices <- c(indices,c(
                   
                   # SRMR as calculated in SEM. (Hu and Bentler, 1999, p. 3)
                   
@@ -182,7 +181,7 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
                   
                   # SRMR calculated ignoring within block residuals from Henserler et al 2014.
                   
-                  SRMR_Henseler = RMS(C_std[nativeModel$reflective %*% t(nativeModel$reflective)==0]))
+                  "SRMR (Henseler)" = RMS(C_std[nativeModel$reflective %*% t(nativeModel$reflective)==0]))
   )
   
   if(observed){
@@ -199,7 +198,8 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
 #'@S3method print matrixplsresiduals
 
 print.matrixplsresiduals <- function(x, ...){
-  if("outer" %in% names(x)){
+
+    if("inner" %in% names(x)){
     cat("\n Inner model (composite) residual covariance matrix\n")
     print(x$inner, ...)
     cat("\n Outer model (indicator) residual covariance matrix\n")
@@ -209,11 +209,14 @@ print.matrixplsresiduals <- function(x, ...){
     cat("\n Model implied residual covariance matrix\n")
     print(x$outer, ...)
   }
+
   cat("\n Residual-based fit indices\n")
-  print(data.frame(Value = unlist(x$indices)), ...)
+  i <- as.matrix(x$indices)
+  colnames(i) <- "Value"
+  print(i, ...)
 }
 
-#'@title Model implied covariance matrix baesd on matrixpls results
+#'@title Model implied covariance matrix based on matrixpls results
 #'
 #'@description
 #'
@@ -358,17 +361,6 @@ fitted.matrixpls <- function(object, ...) {
   Sigma
 }
 
-#'@S3method print matrixplsresiduals
-
-print.matrixplsresiduals <- function(x, ...){
-  cat("\n Inner model (composite) residual covariance matrix\n")
-  print(x$inner, ...)
-  cat("\n Outer model (indicator) residual covariance matrix\n")
-  print(x$outer, ...)
-  cat("\n Residual-based fit indices\n")
-  print(data.frame(Value = unlist(x$indices)), ...)
-}
-
 #'@title R2	for matrixpls results
 #'
 #'@description
@@ -471,14 +463,14 @@ print.matrixplsgof <- function(x, digits=getOption("digits"), ...){
 #'
 #'@export
 #'
-loadings.matrixpls <- function(object, ...){
+loadings <- function(object, ...){
   UseMethod("loadings")
 }
 
 #
 #'@S3method loadings matrixpls
 
-loadings <- function(object, ...) {
+loadings.matrixpls <- function(object, ...) {
   nativeModel <- attr(object,"model")
   IC <- attr(object,"IC")
   
@@ -542,68 +534,7 @@ print.matrixplscr <- function(x, ...){
   print.table(x, ...)
 }
 
-#'@title Predict method for matrixpls results
-#'
-#'@description
-#'
-#'The \code{matrixpls} method for the generic function \code{predict} predict.
-#'Predicts the reflective indicators of endogenous latent variables using
-#'estimated model and data for the indicators of exogenous latent variables
-#'
-#'@template postestimationFunctions
-#'
-#'@param newdata A data frame or a matrix containing data used for prediction.
-#'
-#'@return a matrix of predicted values for reflective indicators of endogenous latent variables.
-#'
-#'@references
-#'
-#'Wold, H. (1974). Causal flows with latent variables: Partings of the ways in the light of NIPALS modelling. \emph{European Economic Review}, 5(1), 67–86. doi:10.1016/0014-2921(74)90008-7
-#'
-#'
-#'@export
-#'
-#'@method predict matrixpls
-#'
-#'@S3method predict matrixpls
 
-
-predict.matrixpls <- function(object, newdata, ...){
-  
-  nativeModel <- attr(object,"model")
-  exog <- rowSums(nativeModel$inner)==0
-  W <- attr(object,"W")
-  inner <- attr(object,"inner")
-  
-  reflective <- nativeModel$reflective
-  reflective[which(reflective==1)] <- object[grep("=~",names(object))]
-  
-  # Reorder the variables in newdata
-  data <- NULL
-  
-  for(name in colnames(W)){
-    if(! name %in% colnames(newdata)){
-      data <- cbind(data,NA)
-    }
-    else{
-      data <- cbind(data,newdata[,name])
-    }
-  }
-  
-  colnames(data) <- colnames(W)
-  
-  LVScores <- as.matrix(data) %*% t(W)
-  
-  # Predict endog LVs usign reduced from equations
-  Beta <- inner[! exog, ! exog]
-  Gamma <- inner[! exog, exog]
-  
-  LVScoresEndo <- (LVScores[,exog] %*% t(Gamma)) %*% solve(diag(nrow(Beta))- t(Beta))
-  
-  LVScores[,! exog] <- LVScoresEndo
-  
-  LVScores %*% t(reflective)
-}
 
 #'@title Average Variance Extracted indices for matrixpls results
 #'
@@ -710,8 +641,15 @@ htmt <- function(object, ...){
   htmt <- meanBlockCor*lower.tri(meanBlockCor) /
     sqrt(diag(meanBlockCor) %o% diag(meanBlockCor))
   
+  class(htmt) <- "matrixplshtmt"
   htmt
 }
+
+print.matrixplshtmt <- function(x, ...){
+  cat("\n Heterotrait-monotrait matrix\n")
+  print.table(x, ...)
+}
+
 
 #'@title Summary of model fit of PLS model
 #'
@@ -737,12 +675,12 @@ fitSummary <- function(object){
     else min(x)
   }
   
-  ret <- list("Min CR" = m(cr(object)),
+  ret <- c("Min CR" = m(cr(object)),
               "Min AVE" = m(ave(object)$ave),
               "Min AVE - sq. cor" = m(ave(object)$ave_correlation),
               "Goodness of Fit" = gof(object),
-              SRMR = stats::residuals(object)$indices$srmr,
-              "SRMR (Henseler)" = stats::residuals(object)$indices$srmr_Henseler)
+              stats::residuals(object)$indices[6:7]
+           )
   
   class(ret) <- "matrixplfitsummary"
   ret
@@ -752,5 +690,9 @@ fitSummary <- function(object){
 
 print.matrixplfitsummary <- function(x, ...){
   cat("\n Summary indices of model fit\n")
-  print(data.frame(Value = unlist(x)), ...)
+  
+  x <- as.matrix(x)
+  colnames(x) <- "Value"
+  print(x)
+
 }

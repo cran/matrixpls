@@ -104,7 +104,7 @@ parseModelToNativeFormat <- function(model){
   } else if (is.partable(model)) {
     return(lavaanParTableToNativeFormat(model))
   } else if (is.lavaancall(model)) {
-    browser()
+    return(parseModelToNativeFormat(model$model))
   } else if (methods::is(model, "lavaan")) {
     return(lavaanParTableToNativeFormat(model@ParTable))
     #	} else if (methods::is(model, "MxModel")) {
@@ -140,6 +140,56 @@ is.matrixpls.model <- function(model) {
             setequal(names(model),c("inner","reflective","formative")) &&
             all(sapply(model,is.matrix)))
   
+}
+
+convergenceStatus <- function(matrixpls.res){
+  
+  # Check for inadmissible solutions. 
+  #
+  # 0: Converged normally 
+  # 1: Non-convergent result
+  # 2: Non-converged imputation (not used)
+  # 3: At least one SE is negative or NA (not used)
+  # 4: At least one variance estimate is negative
+  # 5: At least one correlation estimate is greater than 1 or less than -1
+  
+  # Non-iterative weight functions do not return convergence status so both NULL
+  # and TRUE are considered as converged
+  
+  if(is.null(attr(matrixpls.res,"converged")) ||
+     attr(matrixpls.res,"converged")){
+    
+    converged <- 0
+    
+    C <- attr(matrixpls.res,"C")
+    
+    if(max(abs(C[lower.tri(C)]))>1){
+      converged <- 5 
+    }
+    
+    IC <- attr(matrixpls.res,"IC")
+    
+    # The indicators are not necessary standardized, so we need to rescale the IC matrix
+    
+    v <- diag(attr(matrixpls.res,"S"))[colnames(IC)]
+    
+    if(max(abs(IC %*% diag(1/sqrt(v))))>1){
+      converged <- 5 
+    }
+    
+    # If the model is estimated with 2SLS, then checking C is not enough to check for admissible
+    # solution. We need to calculate the explained variances of the endogenous composites
+    
+    else{
+      inner <- attr(matrixpls.res,"inner")
+      if(any(diag(inner%*%C%*%t(inner)) > 1)){
+        converged <- 4
+      }
+    }
+  }
+  else converged <- 1
+  
+  converged
 }
 
 #
