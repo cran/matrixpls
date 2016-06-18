@@ -1,11 +1,11 @@
-62a319f545e2d999bbdd80a29ceacf00 *DESCRIPTION
+6f447e95fcfb99532a1a5c56cf0b7bcc *DESCRIPTION
 1d22232570c0dfe24059d6a5b4555070 *NAMESPACE
 d41d8cd98f00b204e9800998ecf8427e *NEWS
 51e7be1ba6829310e330b10fd5f3fe29 *R/convCheck.R
 ed3d4b579e1391f8c8be9eaee73cba45 *R/estimator.R
 1744b89e8d82e2a1633141520e92487d *R/innerEstim.R
 f301663f7bc09626d505a9ed9d4413af *R/matrixpls.R
-7bee580350e0b23e2186c7893aaa368b *R/matrixpls.boot.R
+2d50fc6eaa7873a021f751bfecc25f67 *R/matrixpls.boot.R
 9d12e2d07bc8733f0829b4730b1313b1 *R/matrixpls.crossvalidate.R
 5b499259e74ad2f2ca1bd28c7a0012ac *R/matrixpls.optim.R
 ed86ea25bda445646a454f16af45851b *R/matrixpls.plspm.R
@@ -13,9 +13,9 @@ d3ee050138b59904cf5d1751558fd6b2 *R/matrixpls.postestimation.R
 b4fd480dff373ce83500f34371397dab *R/matrixpls.predict.R
 115357413704f60d63ac3ed0ca992469 *R/matrixpls.sempls.R
 9ffdfdb239360c8d6667a96fe39cffe5 *R/matrixpls.sim.R
-ddc5fb908a436a86b3bd4779a81810da *R/matrixpls.util.R
+c42366ddd86ee87d975b7b48788d8190 *R/matrixpls.util.R
 ad128c59fe04e6e34873057724c8de3e *R/outerEstim.R
-8e76398bd17468c61bcf14f36877a659 *R/paramEstimator.R
+83f23ddead4c2eb915a4d1803b2179de *R/paramEstimator.R
 30e9fb7dfb95b1b1d1d4321a875cacb9 *R/reliabilityEstim.R
 22bba00588dab14c7a60312f50f2e5c2 *R/signChange.R
 423f4cc71aee95b762201946561c2ef8 *R/weightFun.R

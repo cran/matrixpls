@@ -91,7 +91,7 @@ matrixpls.boot <- function(data, model, ..., R = 500,
   
   
   model <- parseModelToNativeFormat(model)
-
+  
   data <- data[,rownames(model$reflective)]
   data <- as.matrix(data)
   
@@ -118,7 +118,7 @@ matrixpls.boot <- function(data, model, ..., R = 500,
   }
   
   # Bootstrap
-
+  
   boot.out <- boot::boot(data,
                          function(data, indices, ...){
                            
@@ -133,8 +133,7 @@ matrixpls.boot <- function(data, model, ..., R = 500,
                                boot.rep <- do.call(matrixpls, arguments)
                              )
                            }
-                           # Deal with inadmissibles
-                           if(dropInadmissible && convergenceStatus(boot.rep) != 0) return(NA)
+                           
                            
                            # Add additional statistics
                            
@@ -144,16 +143,45 @@ matrixpls.boot <- function(data, model, ..., R = 500,
                              a$names <- names(boot.rep)
                              attributes(boot.rep) <- a
                            }
-                           
+
+                           # Add convergence status as the last statistic. This will be removed
+                           # later
+
+                           boot.rep[length(boot.rep)+1] <- convergenceStatus(boot.rep)
+
                            # If the indices are not sorted, then this is not the original sample
-                           # and we can safely omit all attributes to save memory
+                           # and we can safely omit all attributes to save memory. 
                            
-                           if(is.unsorted(indices)) attributes(boot.rep) <- NULL
+                           if(is.unsorted(indices)){
+                             attributes(boot.rep) <- NULL
+                           }
                            
                            boot.rep
+                           
                          },
                          R, parallel = parallel, ncpus = ncpus, ...)
   
+  
+  # Store the convergence status frequencies
+  boot.out$convergence <- table(boot.out$t[,1])
+  
+  # Clean inadmisibles
+  
+  i <- length(boot.out$t0)
+  
+  if(dropInadmissible){
+    boot.out$t <- boot.out$t[boot.out$t[,i]==0,]
+    boot.out$R <- nrow(boot.out$t)
+  }
+
+  # Remove the convergence status from the estimates
+  a <- attributes(boot.out$t0)
+  a$names <- a$names[-length(boot.out$t0)]
+  boot.out$t <- boot.out$t[,-i]
+  boot.out$t0 <- boot.out$t0[-i]
+  attributes(boot.out$t0) <- a
+  
+  # Set class and return
   class(boot.out) <- c("matrixplsboot", class(boot.out))
   boot.out
 }
@@ -171,8 +199,12 @@ print.matrixplsboot <- function(x, ...){
 #'@S3method summary matrixplsboot
 
 summary.matrixplsboot <- function(object, ...){
+  
   matrixpls.res <- object$t0
+  
+  attr(matrixpls.res,"boot.out") <- object
   out <- summary(matrixpls.res)
+  
   attr(out,"boot.out") <- object
   
   cat("\nCalculating confidence intervals.\n")
@@ -182,16 +214,25 @@ summary.matrixplsboot <- function(object, ...){
                            sum(attr(matrixpls.res,"W")!=0))
   
   cis <- lapply(parameterIndices, function(i){
+    
+    cis <- c(matrixpls.res[i], rep(NA,8))
     ci <- boot::boot.ci(object,...,index = i, type = c("norm","basic", "perc"))
-    cis <- c(matrixpls.res[i],ci$normal[2:3],ci$basic[4:5], ci$percent[,4:5],NA,NA)
     
-    # BCa intervals cannot be always calculated
+    # CIs cannot always be calculated
     
-    tryCatch(
-      cis[8:9] <- boot::boot.ci(object,...,index = i, type = "bca")$bca[,4:5],
-      error = function(e){
-        warning(e)
-      })
+    if(! is.null(ci$normal[2:3])) cis[2:3] <- ci$normal[2:3]
+    if(! is.null(ci$basic[4:5])) cis[4:5] <- ci$basic[4:5]
+    if(! is.null(ci$percent[4:5])) cis[6:7] <- ci$percent[4:5]
+    
+    # BCa intervals some times produce errors
+    
+    tryCatch({
+      bcacis <- boot::boot.ci(object,...,index = i, type = "bca")$bca[,4:5]
+      if(!is.null(bcacis)) cis[8:9] <- bcacis
+    },
+    error = function(e){
+      warning(e)
+    })
     
     cis
   })
@@ -231,10 +272,10 @@ summary.matrixplsboot <- function(object, ...){
     t <- est/se
     
     c(est,se,t,
-      (1-stats::pt(t,dfHa-IVs[i]))*2, # Regression
-      (1-stats::pt(t,dfHa))*2, # Hair
-      (1-stats::pt(t,dfHe))*2, # Henseler
-      (1-stats::pnorm(t))*2) # Standard normal
+      (1-stats::pt(abs(t),dfHa-IVs[i]))*2, # Regression
+      (1-stats::pt(abs(t),dfHa))*2, # Hair
+      (1-stats::pt(abs(t),dfHe))*2, # Henseler
+      (1-stats::pnorm(abs(t)))*2) # Standard normal
     
   })
   
@@ -260,7 +301,7 @@ print.matrixplsbootsummary <- function(x, ...){
   class(x) <- "matrixplssummary"
   print(x)
   
-  cat("\n Bootstrap SEs and significance tests\n")
+  cat("\n Bootstrap SEs and two-tailed significance tests\n")
   print(p, ...)
   
   cat("\n Bootstrap confidence intervals\n")
