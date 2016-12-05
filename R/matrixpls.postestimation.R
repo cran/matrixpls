@@ -67,10 +67,28 @@ print.matrixplseffects <- function(x, ...){
 #'covariance matrix and various fit indices. 
 #'
 #'@details The residuals can be
-#'either observed empirical residuals as presented by Lohmöller (1989, ch 2.4) or 
-#'model implied residuals as used by Henseler et al. (2014). Two versions of the SRMR index are
-#'provided, the traditional SRMR that includes all residual covariances, and the version
-#'proposed by Henseler et al. (2014) where the within-block residual covariances are ignored.
+#'either observed residuals from the regressions of indicators on composites and composites 
+#'on composites
+#'(i.e. the \code{reflective} and \code{inner} models) as presented by Lohmöller (1989, ch 2.4) or 
+#'model implied residuals calculated by subtracting model implied covariance matrix from the 
+#'sample covariance matrix as done by Henseler et al. (2014). 
+#'
+#'The root mean squared residual indices (Lohmöller, 1989, eq 2.118) are calculated from the
+#'off diagonal elements of the residual covariance matrix. The
+#'standardized root mean squared residual (SRMR) is calculated based on the standardized residuals
+#'of the \code{reflective} model matrix. 
+#'
+#'Following Hu and Bentler (1999, Table 1), the SRMR index is calculated by dividing with 
+#'\eqn{p(p+1)/2}, where \eqn{p} is the number of indicator variables. In typical SEM applications,
+#'the diagonal of residual covariance matrix consistes of all zeros because error term variances
+#'are freely estimated. To make the SRMR more comparable with the index produced by 
+#'SEM software, the SRMR is calculated by summing only the squares of off-diagonal elements,
+#'which is equivalent to including a diagonal of all zeros. 
+#'
+#'Two versions of the 
+#'SRMR index are rovided, the traditional SRMR that includes all residual covariances, and the 
+#'version proposed by Henseler et al. (2014) where the within-block residual covariances are 
+#'ignored. 
 #'
 #'@template postestimationFunctions
 #'
@@ -88,13 +106,17 @@ print.matrixplseffects <- function(x, ...){
 #'
 #'@references
 #'
-#'Lohmöller J.-B. (1989) \emph{Latent variable path modeling with partial
-#'least squares.} Heidelberg: Physica-Verlag.
-#'
 #'Henseler, J., Dijkstra, T. K., Sarstedt, M., Ringle, C. M., Diamantopoulos, A., Straub, D. W., …
 #'Calantone, R. J. (2014). Common Beliefs and Reality About PLS Comments on Rönkkö and Evermann 
-#'(2013). Organizational Research Methods, 17(2), 182–209. doi:10.1177/1094428114526928
+#'(2013). \emph{Organizational Research Methods}, 17(2), 182–209. doi:10.1177/1094428114526928
 #'
+#'Hu, L., & Bentler, P. M. (1999). Cutoff criteria for fit indexes in covariance structure 
+#'analysis: Conventional criteria versus new alternatives. \emph{Structural Equation Modeling: 
+#'A Multidisciplinary Journal}, 6(1), 1–55.
+#'
+#'Lohmöller J.-B. (1989) \emph{Latent variable path modeling with partial
+#'least squares.} Heidelberg: Physica-Verlag.
+
 #'@export
 #'
 #'@method residuals matrixpls
@@ -106,6 +128,13 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
   RMS <- function(num) sqrt(sum(num^2)/length(num))
   
   S <- attr(object,"S")
+  
+  # Lohmöller defines quite a few statistics based on correlations.
+  # Because S is a covariance matrix, we need to calculate the 
+  # corresponding correlation matrix as well.
+  
+  Scor <- stats::cov2cor(S)
+  
   nativeModel <- attr(object,"model")
   
   # Equation numbers in parenthesis refer to equation number in Lohmoller 1989
@@ -129,6 +158,10 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
     
     P[P==1] <- object[grepl("=~", names(object), fixed=TRUE)]
     
+    # Standardized loadings
+    Pstd <- sweep(P,MARGIN=1,sqrt(diag(S)),`/`)
+    
+    # This is always standardized, so no need to rescale 
     B <- attr(object,"inner")
     
     # Lohmoller is not clear whether R should be based on the estimated betas or calculated scores
@@ -138,23 +171,39 @@ residuals.matrixpls <- function(object, ..., observed = TRUE) {
     R_star <- (B %*% R %*% t(B))[endog,endog] # e. 2.99
     
     
-    # Model implied indicator covariances
-    H <- P %*% R %*% t(P) # eq 2.96
+    # Model implied indicator correlations
+    H <- Pstd %*% R %*% t(Pstd) # eq 2.96
     
-    I <- diag(S)
-    H2 <- (I * H)  %*% MASS::ginv(I * S) # eq 2.9	
+    I <- diag(ncol(Scor))
+    H2 <- (I * H)  %*% solve(I * Scor) # eq 2.97
     
-    F <- P %*% B %*% R %*% t(B) %*% t(P) # eq 2.104
+    F <- Pstd %*% B %*% R %*% t(B) %*% t(Pstd) # eq 2.104
     
-    F2 <- (I * F) %*% MASS::ginv(I * S) # eq 2.105
+    F2 <- (I * F) %*% solve(I * Scor) # eq 2.105
     
     r2 <- r2(object)
     
     
-    # C in Lohmoller 1989 is different from the matrixpls C
-    # residual covariance matrix of indicators
+    # Lohmoller 1989 uses C for the residual covariance matrix of indicators
+    # matrixpls uses C for the composite correlation matrix, but from here on
+    # until the end of the function, C is used for the residual covariance matrix
     
-    C <- S-H
+    # Lohmoller does not define C in covariance form, so we need to do it ourselfs.
+    # 
+    # Start with the observed residuals:
+    #
+    # e = X-XW'P'
+    # 
+    # because residuals have a mean of zero cov(e) can be defined as
+    # 
+    # cov(e) = (X-XW'P')’(X-XW'P')
+    # cov(e) = (X’-(XW'P')')(X-XW'P')
+    # cov(e) = (X’-PWX')(X-XW'P')
+    # cov(e) = X’X-X’XW'P'-PWX'X+PWX'XW'P'
+    # cov(e) = S-SW'P'-PWS+PWSXW'P'
+    # cov(e) = S-SW'P'-(SW'P')’+PRP'
+
+    C <- S - S%*%t(W)%*%t(P) - t(S-S%*%t(W)%*%t(P)) + P%*%R%*%t(P)
     
     Q <- (W %*% S %*% t(W))[endog,endog] - R_star
     
@@ -225,7 +274,7 @@ print.matrixplsresiduals <- function(x, ...){
 #'simultaneous equations system. The error terms are constrained to be uncorrelated and 
 #'covariances between exogenous variables are fixed at their sample values. Defining a
 #'composite as dependent variable in both inner and formative creates an impossible model
-#'and results in an errors
+#'and results in an error.
 #'
 #'@template postestimationFunctions
 #'
@@ -625,7 +674,9 @@ print.matrixplsave <- function(x, ...){
 
 htmt <- function(object, ...){
   
-  S <- attr(object,"S")
+  #HTMT is calculated from correlation matrix
+  S <- stats::cov2cor(attr(object,"S"))
+  
   reflective <- attr(object,"reflective")!=0
   
   # Mean within- and between-block correlations
