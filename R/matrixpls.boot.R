@@ -41,7 +41,7 @@
 #'
 #'@param signChange Sign change correction function.
 #'
-#'@param extraFun A function that takes a \code{matrixpls} object and returns a numeric vector. The
+#'@param extraFun A function that takes a \code{matrixpls} object and a boostrap sample and returns a numeric vector. The
 #'vector is appended to bootstrap replication. Can be used for boostrapping additional
 #'statistics calculated based on the estimation results.
 #'
@@ -66,7 +66,7 @@
 #'
 #'@example example/matrixpls.boot-example.R 
 #'
-#'@reference
+#'@references
 #'
 #'Hair, J. F., Hult, G. T. M., Ringle, C. M., & Sarstedt, M. (2014). \emph{A primer on partial least squares structural equations modeling (PLS-SEM)}. Los Angeles: SAGE.
 #'
@@ -76,6 +76,7 @@
 #'
 #'Rönkkö, M., McIntosh, C. N., & Antonakis, J. (2015). On the adoption of partial least squares in psychological research: Caveat emptor. \emph{Personality and Individual Differences}, (87), 76–84. http://doi.org/10.1016/j.paid.2015.07.019
 #'
+#'@name matrixplsboot
 #'
 matrixpls.boot <- function(data, model, ..., R = 500,
                            signChange = NULL,
@@ -139,16 +140,16 @@ matrixpls.boot <- function(data, model, ..., R = 500,
                            
                            if(!is.null(extraFun)){
                              a <- attributes(boot.rep)
-                             boot.rep <-c(boot.rep,extraFun(boot.rep))
+                             boot.rep <-c(boot.rep,extraFun(boot.rep, data[indices,]))
                              a$names <- names(boot.rep)
                              attributes(boot.rep) <- a
                            }
-
+                           
                            # Add convergence status as the last statistic. This will be removed
                            # later
-
+                           
                            boot.rep[length(boot.rep)+1] <- convergenceStatus(boot.rep)
-
+                           
                            # If the indices are not sorted, then this is not the original sample
                            # and we can safely omit all attributes to save memory. 
                            
@@ -173,7 +174,7 @@ matrixpls.boot <- function(data, model, ..., R = 500,
     boot.out$t <- boot.out$t[boot.out$t[,i]==0,]
     boot.out$R <- nrow(boot.out$t)
   }
-
+  
   # Remove the convergence status from the estimates
   a <- attributes(boot.out$t0)
   a$names <- a$names[-length(boot.out$t0)]
@@ -186,9 +187,7 @@ matrixpls.boot <- function(data, model, ..., R = 500,
   boot.out
 }
 
-# These are not in use 
-
-#'@S3method print matrixplsboot
+#'@export
 
 print.matrixplsboot <- function(x, ...){
   matrixpls.out <- x$t0
@@ -196,9 +195,15 @@ print.matrixplsboot <- function(x, ...){
   print(matrixpls.out, ...)
 }
 
-#'@S3method summary matrixplsboot
 
-summary.matrixplsboot <- function(object, ...){
+# 
+#'@param object object of class \code{matrixplsboot}
+#'@param ci.type A vector of character strings representing the type of intervals required. Passed on to \code{\link[boot]{boot.ci}}. If \code{"none"}, 
+#'no confidence intervals are calculated.
+#'@export
+#'@rdname matrixplsboot
+
+summary.matrixplsboot <- function(object, ..., ci.type ="all"){
   
   matrixpls.res <- object$t0
   
@@ -206,43 +211,11 @@ summary.matrixplsboot <- function(object, ...){
   out <- summary(matrixpls.res)
   
   attr(out,"boot.out") <- object
-  
-  cat("\nCalculating confidence intervals.\n")
-  
-  # Omit CIs for the weights
+
+  # Omit p-values and CI for the weights
   parameterIndices <- 1:(length(matrixpls.res) -
                            sum(attr(matrixpls.res,"W")!=0))
-  
-  cis <- lapply(parameterIndices, function(i){
-    
-    cis <- c(matrixpls.res[i], rep(NA,8))
-    ci <- boot::boot.ci(object,...,index = i, type = c("norm","basic", "perc"))
-    
-    # CIs cannot always be calculated
-    
-    if(! is.null(ci$normal[2:3])) cis[2:3] <- ci$normal[2:3]
-    if(! is.null(ci$basic[4:5])) cis[4:5] <- ci$basic[4:5]
-    if(! is.null(ci$percent[4:5])) cis[6:7] <- ci$percent[4:5]
-    
-    # BCa intervals some times produce errors
-    
-    tryCatch({
-      bcacis <- boot::boot.ci(object,...,index = i, type = "bca")$bca[,4:5]
-      if(!is.null(bcacis)) cis[8:9] <- bcacis
-    },
-    error = function(e){
-      warning(e)
-    })
-    
-    cis
-  })
-  
-  cis <- do.call(rbind,cis)
-  rownames(cis) <- names(matrixpls.res)[parameterIndices]
-  colnames(cis) <- c("Estimate","Norm low", "Norm up","Basic low", "Basic up",
-                     "Perc low", "Perc up", "BCa low", "BCa up")
-  
-  out$ci <- cis
+
   
   # P-values
   
@@ -285,11 +258,48 @@ summary.matrixplsboot <- function(object, ...){
   colnames(ps) <- c("Estimate","SE","t","p (regression)","p (Hair)", "p (Henseler)","p (z)")
   out$p <- ps
   
+  if(! ci.type == "none"){
+    cat("\nCalculating confidence intervals.\n")
+    
+    
+    cis <- lapply(parameterIndices, function(i){
+      
+      cis <- c(matrixpls.res[i], rep(NA,8))
+      ci <- boot::boot.ci(object,...,index = i, type = c("norm","basic", "perc"))
+      
+      # CIs cannot always be calculated
+      
+      if(! is.null(ci$normal[2:3])) cis[2:3] <- ci$normal[2:3]
+      if(! is.null(ci$basic[4:5])) cis[4:5] <- ci$basic[4:5]
+      if(! is.null(ci$percent[4:5])) cis[6:7] <- ci$percent[4:5]
+      
+      # BCa intervals some times produce errors
+      
+      tryCatch({
+        bcacis <- boot::boot.ci(object,...,index = i, type = "bca")$bca[,4:5]
+        if(!is.null(bcacis)) cis[8:9] <- bcacis
+      },
+      error = function(e){
+        warning(e)
+      })
+      
+      cis
+    })
+    
+    cis <- do.call(rbind,cis)
+    rownames(cis) <- names(matrixpls.res)[parameterIndices]
+    colnames(cis) <- c("Estimate","Norm low", "Norm up","Basic low", "Basic up",
+                       "Perc low", "Perc up", "BCa low", "BCa up")
+    
+    out$ci <- cis
+    
+  }
+  
   class(out) <- "matrixplsbootsummary"
   out
 }
 
-#'@S3method print matrixplsbootsummary
+#'@export
 
 print.matrixplsbootsummary <- function(x, ...){
   p <- x$p
@@ -304,23 +314,24 @@ print.matrixplsbootsummary <- function(x, ...){
   cat("\n Bootstrap SEs and two-tailed significance tests\n")
   print(p, ...)
   
-  cat("\n Bootstrap confidence intervals\n")
-  ci <- data.frame(Estimate = ci[,1]," ",
-                   " (",
-                   ci[,2]," ",
-                   Norm=ci[,3],
-                   ") (",
-                   ci[,4]," ",
-                   Basic=ci[,5],
-                   ") (",
-                   ci[,6]," ",
-                   Perc=ci[,7],
-                   ") (",
-                   ci[,8]," ",
-                   BCa=ci[,9],
-                   ")")
-  colnames(ci)[-c(1,6,10,14,18)] <- " "
-  print(ci, ..., print.gap = 0)
-  
+  if(! is.null(ci)){
+    cat("\n Bootstrap confidence intervals\n")
+    ci <- data.frame(Estimate = ci[,1]," ",
+                     " (",
+                     ci[,2]," ",
+                     Norm=ci[,3],
+                     ") (",
+                     ci[,4]," ",
+                     Basic=ci[,5],
+                     ") (",
+                     ci[,6]," ",
+                     Perc=ci[,7],
+                     ") (",
+                     ci[,8]," ",
+                     BCa=ci[,9],
+                     ")")
+    colnames(ci)[-c(1,6,10,14,18)] <- " "
+    print(ci, ..., print.gap = 0)
+  }  
 }
 
