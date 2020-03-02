@@ -288,15 +288,42 @@ print.matrixplsresiduals <- function(x, ...){
 
 fitted.matrixpls <- function(object, ...) {
   
-  # Equation numbers in parenthesis refer to equation number in Lohmoller 1989
+  # Contains: $inner (J x J), $reflective (K x J), $formative (J x K)
   
   nativeModel <- attr(object,"model")
   
   # Check that the matrices form a valid model
   
-  if(any(rowSums(nativeModel$formative) > 0 & rowSums(nativeModel$formative) > 0))
-    stop("Cannot calculate model implied covariance matrix. A composite is a dependent variable in both formative and inner matrices resulting in an impossible model")
+  if(any(rowSums(nativeModel$inner) > 0 & rowSums(nativeModel$formative) > 0))
+    stop("Cannot calculate model implied covariance matrix. A composite is a dependent variable in both formative and inner matrices resulting in an impossible model. See http://urn.fi/URN:NBN:fi:aalto-201605031907, p. 823 for an explanation and pp. 70-76 for further technical details.")
   
+  ### Matrices -------------------------------------------------------------------------------------
+  ## S      := (K x K) Empirical indicator VCV matrix: Cov(x)
+  ## IC     := (J x K) Empirical indicator-construct VCV matrix
+  ## C      := (J x J) Empirical construct covariance/correlation matrix (V(eta) = WSW')
+  ## B      := (J x J) Matrix of (estimated) path coefficients (zero if there is no path)
+  ## F      := (J x K) Matrix containing the estimated parameters of the formative (composite) model
+  ## P      := (K X J) Matrix of factor and/or composite loadings (usually: Lambda)
+  ##
+  ## ---- Bentler & Weeks notation
+  ##
+  ## y      := (p x 1) Vector of observed/measured dependent indicators (manifest variables)
+  ## x      := (q x 1) Vector of observed independent indicators (usually 0 in a "normal" framework)
+  ## p      := Number of observed dependent variables (usually all indicators)
+  ## q      := Number of observed independent variables (0 in a complete latent-variable model)
+  ## m      := Number of dependent variables ("endogenous" constructs + indicators)
+  ## n      := Number of independent variables ("exogenous" constructs + zetas + deltas)
+  ## r      := Number of observed variables, r = p + q
+  ## s      := Total number of variables, s = m + n
+  ## beta   := (m x m) Coefficient matrix of dep. variables on dep. variables.
+  ## gamma  := (m x n) Coefficient matrix of indep. variables on dep. variables.
+  ## Phi    := (n x n) VCV of independent variables .
+  ## Gamma  := ()
+  ## Beta   := ()
+  ## G      := (r x s) 
+  ### ----------------------------------------------------------------------------------------------
+  
+  ## Get relevant matrices
   S <- attr(object,"S")
   IC <- attr(object,"IC")
   C <- attr(object,"C")
@@ -304,6 +331,8 @@ fitted.matrixpls <- function(object, ...) {
   F <- attr(object,"formative")
   L <- attr(object,"reflective")
   
+  
+  #### Define full matrices to select from ---------------------------------------------------------
   
   # Matrices containing all regressions and covariances
   # indicators first, then composites
@@ -314,9 +343,11 @@ fitted.matrixpls <- function(object, ...) {
   fullC <- rbind(cbind(S,t(IC)),
                  cbind(IC,C))
   
+  ## Selector for all exogenous variables
+  
   exog <- rowSums(fullB) == 0
   
-  # Add indicator errors and composite errors
+  ## Compute outer and inner errors variance and put them in a vector (Var(delta) and Var(zeta)).
   
   e <- c(diag(S) - rowSums(L * t(IC)),
          1-r2(object))
@@ -520,16 +551,9 @@ loadings <- function(object, ...){
 #'@export
 
 loadings.matrixpls <- function(object, ...) {
-  nativeModel <- attr(object,"model")
-  IC <- attr(object,"IC")
-  
-  #Standardize
-  S <- attr(object,"S")
-  IC_std <- IC %*% (diag(1/sqrt(diag(S))))
-  
-  res <- nativeModel$reflective
-  res[res==1] <- t(IC_std)[res==1]
-  res
+
+  attr(object,"reflective")
+
 }
 
 #'@title Composite Reliability indices for matrixpls results
@@ -560,10 +584,12 @@ cr <- function(object, ...){
 
 cr.matrixpls <- function(object, ...) {
   
+  object <- standardize(object)
+  
   loadings <- loadings(object)
   reflectiveModel <- attr(object, "model")$reflective
   
-  result <- unlist(lapply(1:ncol(loadings), function(col){	
+  result <- unlist(lapply(1:ncol(loadings), function(col){
     useLoadings <- abs(loadings[,col][reflectiveModel[,col]==1])
     
     crvalue <- sum(useLoadings)^2/
@@ -614,7 +640,9 @@ ave <- function(object, ...){
 
 ave.matrixpls <- function(object, ...) {
   
-  loadings <- loadings(object, standardized = TRUE)
+  object <- standardize(object)
+
+  loadings <- loadings(object)
   reflectiveModel <- attr(object, "model")$reflective
   
   aves <- unlist(lapply(1:ncol(loadings), function(col){
@@ -690,6 +718,11 @@ htmt <- function(object, ...){
   # Choose the blocks that have at least two reflective indicators
   i <- which(colSums(reflective) > 1)
   meanBlockCor <- meanBlockCor[i,i]
+
+  if(length(i)<2){
+    warning("HTMT can only be calculated if there are at least two composites with reflective parameters to at least two indicators.")
+    return(NULL)
+  }
   
   # Calculate the indices
   htmt <- meanBlockCor*lower.tri(meanBlockCor) /
@@ -721,7 +754,7 @@ print.matrixplshtmt <- function(x, ...){
 #'@export
 #'
 
-fitSummary <- function(object){
+fitSummary <- function(object, ...){
   
   # Returns the minumum or NA if all are NA
   
@@ -749,6 +782,6 @@ print.matrixplfitsummary <- function(x, ...){
   
   x <- as.matrix(x)
   colnames(x) <- "Value"
-  print(x)
+  print(x, ...)
 
 }

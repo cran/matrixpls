@@ -17,6 +17,17 @@ estimatesMatrixToVector <- function(est, m, sep, reverse = FALSE){
   ret
 }
 
+#
+# Alpha reliability coefficient based on correlation matrix
+#
+
+alpha <- function(S){
+  # https://en.wikipedia.org/wiki/Cronbach%27s_alpha
+  K <- nrow(S)
+  vbar <- mean(diag(S))
+  cbar <- mean(S[lower.tri(S)])
+  K*cbar/(vbar+(K-1)*cbar)
+}
 
 #
 # Scales the weight matrix so that the resulting composites have unit variance
@@ -192,6 +203,30 @@ convergenceStatus <- function(matrixpls.res){
   converged
 }
 
+#
+# Standardizes the object attributes so that diag of S is all 1s and the other
+# parts of the result object are adjusted accordingly.
+#
+
+standardize <- function(object){
+  
+  S <- attr(object,"S")
+  d <- diag(S)
+  
+  # Only standardized if not already standardized
+  
+  if(any(d != 1)){
+    scaleRows <- 1/sqrt(d)
+    scaleCols <- rep(scaleRows, each = length(scaleRows))
+    attr(object,"W")  <- attr(object,"W") / scaleRows
+    attr(object,"IC") <- attr(object,"IC") * scaleRows
+    attr(object,"reflective") <- attr(object,"reflective") * scaleCols
+    attr(object,"formative") <- attr(object,"formative") / scaleRows
+    attr(object,"S") <- attr(object,"S") * scaleRows * scaleCols
+  } 
+  
+  return (object)
+}
 #
 # Functions adapted from simsem
 #

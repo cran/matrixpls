@@ -4,10 +4,19 @@
 \alias{matrixpls.sim}
 \title{Monte Carlo simulations with matrixpls}
 \usage{
-matrixpls.sim(nRep = NULL, model = NULL, n = NULL, ..., cilevel = 0.95,
-  citype = c("norm", "basic", "stud", "perc", "bca"), boot.R = 500,
-  fitIndices = fitSummary, outfundata = NULL, outfun = NULL,
-  prefun = NULL)
+matrixpls.sim(
+  nRep = NULL,
+  model = NULL,
+  n = NULL,
+  ...,
+  cilevel = 0.95,
+  citype = c("norm", "basic", "stud", "perc", "bca"),
+  boot.R = 500,
+  fitIndices = fitSummary,
+  outfundata = NULL,
+  outfun = NULL,
+  prefun = NULL
+)
 }
 \arguments{
 \item{nRep}{Number of replications. If any of the \code{n}, \code{pmMCAR}, or \code{pmMAR} arguments are specified as lists, the number of replications will default to the length of the list(s), and \code{nRep} need not be specified.}
@@ -18,7 +27,7 @@ table, or 2. a list containing three matrices
 in the model.}
 
 \item{n}{
-	Sample size. Either a single value, or a list of values to vary sample size across replications. The \code{n} argument can also be specified as a random distribution object; if any resulting values are non-integers, the decimal will be rounded. 
+	Sample size. Either a single value, or a list of values to vary sample size across replications. The \code{n} argument can also be specified as a random distribution object; if any resulting values are non-integers, the decimal will be rounded.
 }
 
 \item{...}{All other arguments are passed through to \code{\link[simsem]{sim}},

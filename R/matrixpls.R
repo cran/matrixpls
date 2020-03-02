@@ -240,19 +240,20 @@ matrixpls <- function(S, model, W.model = NULL, weightFun = weightFun.pls,
     stop(paste("Each composite must have a unique name. The names contain duplicates:",
                lvNames))
   
-  if(lvNames != rownames(nativeModel$inner) ||
-       lvNames != colnames(nativeModel$reflective) ||
-       lvNames != rownames(nativeModel$formative)){
+  if(! identical(lvNames, colnames(nativeModel$reflective)) ||
+     ! identical(lvNames,rownames(nativeModel$formative))){
     print(nativeModel)
     stop("Names of composites are inconsistent between inner, reflective, and formative models.")
   }
   
   if(! identical(rownames(nativeModel$reflective), colnames(nativeModel$formative))){
     print(nativeModel)
-    stop("Names of observed variables are inconsistent between inner, reflective, and formative models.")
+    stop("Names of observed variables are inconsistent between reflective and formative models.")
   }
   
   if(! identical(colnames(S), rownames(S))) stop("S must have identical row and column names.")
+  if(! matrixcalc::is.symmetric.matrix(S)) stop("S must be symmetric to be a valid covariance matrix.")
+  if(! matrixcalc::is.positive.semi.definite(S)) stop("S must be positive semi-definite to be a valid covariance matrix.")
   
   if(! identical(colnames(S), colnames(nativeModel$formative))){
     # Do all variables of the model exists in S
@@ -263,10 +264,13 @@ matrixpls <- function(S, model, W.model = NULL, weightFun = weightFun.pls,
     S <- S[colnames(nativeModel$formative), colnames(nativeModel$formative)]
   }
   
-  # If the weight patter is not defined, calculate it based on the model.
+  # If the weight pattern is not defined, calculate it based on the model.
   if(is.null(W.model)) W.model <- defaultWeightModelWithModel(nativeModel)
   if(! identical(colnames(W.model), colnames(S))) stop("Column names of W.model do not match the variable names")
   if(! identical(rownames(W.model), lvNames)) stop("Row names of W.model do not match the latent variable names")
+  
+  
+  
   
   ##################################################################################################
   #
@@ -283,8 +287,8 @@ matrixpls <- function(S, model, W.model = NULL, weightFun = weightFun.pls,
   # Calculate weight.
   
   W <- weightFun(S, W.model = W.model,
-                      model = nativeModel, parameterEstim = parameterEstim.separate,
-                      ..., validateInput = validateInput, standardize = standardize)
+                 model = nativeModel, parameterEstim = parameterEstim.separate,
+                 ..., validateInput = validateInput, standardize = standardize)
   
   # Correct the signs of the weights
   
@@ -343,7 +347,7 @@ print.matrixpls <- function(x, ...){
   
   se <- attr(x,"se")
   boot.out <- attr(x,"boot.out")
-
+  
   if(! is.null(boot.out)){
     estimates <- cbind(estimates, apply(boot.out$t[,indices],2,stats::sd))
     colnames(estimates)[2] <- "SE"

@@ -5,10 +5,17 @@
 \alias{parameterEstim.separate}
 \title{Parameter estimation of full model}
 \usage{
-parameterEstim.separate(S, model, W, ..., parametersInner = estimator.ols,
-  parametersReflective = estimator.ols, parametersFormative = estimator.ols,
+parameterEstim.separate(
+  S,
+  model,
+  W,
+  ...,
+  parametersInner = estimator.ols,
+  parametersReflective = estimator.ols,
+  parametersFormative = estimator.ols,
   disattenuate = FALSE,
-  reliabilities = reliabilityEstim.weightLoadingProduct)
+  reliabilities = reliabilityEstim.weightLoadingProduct
+)
 }
 \arguments{
 \item{S}{Covariance matrix of the data.}

@@ -4,7 +4,7 @@
 \alias{fitSummary}
 \title{Summary of model fit of PLS model}
 \usage{
-fitSummary(object)
+fitSummary(object, ...)
 }
 \arguments{
 \item{object}{matrixpls estimation result object produced by the \code{\link{matrixpls}} function.}
@@ -19,10 +19,16 @@ A list containing a selection of fit indices.
 that are commonly used to access the overall fit of the PLS model.
 }
 \seealso{
-Other post-estimation functions: \code{\link{ave}},
-  \code{\link{cr}}, \code{\link{effects.matrixpls}},
-  \code{\link{fitted.matrixpls}}, \code{\link{gof}},
-  \code{\link{htmt}}, \code{\link{loadings}},
-  \code{\link{predict.matrixpls}}, \code{\link{r2}},
-  \code{\link{residuals.matrixpls}}
+Other post-estimation functions: 
+\code{\link{ave}()},
+\code{\link{cr}()},
+\code{\link{effects.matrixpls}()},
+\code{\link{fitted.matrixpls}()},
+\code{\link{gof}()},
+\code{\link{htmt}()},
+\code{\link{loadings}()},
+\code{\link{predict.matrixpls}()},
+\code{\link{r2}()},
+\code{\link{residuals.matrixpls}()}
 }
+\concept{post-estimation functions}
