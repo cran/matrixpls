@@ -1,4 +1,4 @@
-1ec8c4acdf9c9e6bece4617866dcc931 *DESCRIPTION
+5fda9e9a5de4283a5e123769fe834672 *DESCRIPTION
 391d5df81f5df4af3ddddb0cfb30e357 *NAMESPACE
 d41d8cd98f00b204e9800998ecf8427e *NEWS
 51e7be1ba6829310e330b10fd5f3fe29 *R/convCheck.R
@@ -10,7 +10,7 @@ f705cda2272f90ae88686aa9d326b1b1 *R/estimator.R
 9dea1ec76808bf1c78db1293972fed1d *R/matrixpls.optim.R
 ad58f0c49dbcb4a7e4118f9307eeb7ed *R/matrixpls.plspm.R
 c0c007732838991b745daaf9bdc5aa1f *R/matrixpls.postestimation.R
-34ce59889db00c51d55c23b3ae81b498 *R/matrixpls.predict.R
+54fa4bf8d86f11963848da6d2c2323a7 *R/matrixpls.predict.R
 115357413704f60d63ac3ed0ca992469 *R/matrixpls.sempls.R
 2bdf7744b9b82c4aa4733ec86672d0de *R/matrixpls.sim.R
 0dde37bdfc70570c1d347bfde9371657 *R/matrixpls.util.R
