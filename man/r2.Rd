@@ -12,7 +12,7 @@ r2(object, ...)
 \item{...}{All other arguments are ignored.}
 }
 \value{
-A named numberic vector containing the R2 values.
+A named numeric vector containing the R2 values.
 }
 \description{
 The \code{matrixpls} method for the generic function \code{r2} computes the squared multiple correlation (R2)
@@ -21,6 +21,7 @@ for composites predicted by other composites in the model.
 \seealso{
 Other post-estimation functions: 
 \code{\link{ave}()},
+\code{\link{cei}()},
 \code{\link{cr}()},
 \code{\link{effects.matrixpls}()},
 \code{\link{fitSummary}()},
